@@ -148,7 +148,7 @@ running helper.
 ## 0.6.69 — updates from GitHub (November 1, 2026)
 
 Owner request: "have it pull the latest update from GitHub". The repo
-(`Caseyshea96/jaws_warhammer2`) is public, so no sign-in is needed.
+(`Caseyshea96/nvda_warhammer2`, renamed from jaws_warhammer2 on Nov 1) is public, so no sign-in is needed.
 - `Update.ps1` ("Warhammer NVDA Update" shortcut) first asks the GitHub API
   for the latest release (`/repos/<repo>/releases/latest`). It takes the
   highest `warhammer2-windows-<version>-nvda-automation-preview.zip` asset;

@@ -7,7 +7,7 @@
 # Downloads or on the Desktop. -Zip picks a file. -Folder, -ApiBase,
 # -GamePath and -NoShortcut are for tests.
 param([string]$Zip, [string[]]$Folder, [string]$GamePath, [switch]$NoShortcut, [switch]$Offline,
-    [string]$Repository = 'Caseyshea96/jaws_warhammer2', [string]$ApiBase = 'https://api.github.com')
+    [string]$Repository = 'Caseyshea96/nvda_warhammer2', [string]$ApiBase = 'https://api.github.com')
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue' # the progress bar makes downloads very slow in Windows PowerShell
 function Get-ZipVersion([string]$Name) {
