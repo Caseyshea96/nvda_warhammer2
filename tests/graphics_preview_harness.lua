@@ -17,6 +17,7 @@ local single_press = false -- tests of default single-press activation
 local flat_lords = true -- 0.6.64: older Select Lord tests use the single list (lord-list-flat.flag)
 local repeating_timer = false -- 0.6.64: the game's register_repeating is offered
 local timer_registrations = 0
+local automation_registrations = 0
 local keys_poll
 local function build_nodes(layout)
     local result = {}
@@ -124,6 +125,19 @@ local function start(mode, layout, enable_automation, setup_status_failure, envi
                     if listener[2](context) then listener[3](context) end
                 end
             end}
+        if repeating_timer then
+            real_timer.register_repeating=function(name,interval)
+                if name=='warhammer_accessibility_keys' then return keys_timer.register_repeating(name,interval) end
+                assert(name=='warhammer_accessibility_automation' and interval==250)
+                automation_registrations=(automation_registrations or 0)+1
+                automation_poll=function() -- stays registered
+                    local listener=listeners[name .. '_real_timer']
+                    assert(listener and listener[1]=='RealTimeTrigger')
+                    local context={string=name}
+                    if listener[2](context) then listener[3](context) end
+                end
+            end
+        end
     end
     core = {
         is_frontend = function() return context_mode == 'frontend' end,
@@ -1260,7 +1274,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.65 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.66 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1526,7 +1540,13 @@ key('script_F2'); key('script_F2'); assert(says('Continue Campaign, button, 2 of
 key('script_F4'); assert(#dispatches==1 and dispatches[1]==continue_campaign and says('Continue Campaign activated.'),last())
 start(nil,other_pc)
 for n=1,3 do key('script_F2') end; assert(says('Load Campaign'),last())
-key('script_F4'); assert(#dispatches==0 and says('Not supported yet.'),last())
+key('script_F4'); assert(#dispatches==0 and says('Load Campaign is unavailable.'),last())
+-- 0.6.65: with saves present Load Campaign opens the save list.
+local load_campaign='tree.child2.child1.child0.child0.child0.child0.child3'
+start(nil,other_pc)
+nodes[load_campaign].data.CurrentState='active'; nodes[load_campaign .. '.child0'].data.CurrentState='active'
+for n=1,3 do key('script_F2') end; assert(says('Load Campaign, button, 3 of 22'),last())
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==load_campaign and says('Load Campaign activated.'),last())
 -- A replaced or hidden Continue Campaign between selection and press is refused.
 start(nil,other_pc); nodes[continue_campaign].data.CurrentState='active'
 key('script_F2'); key('script_F2'); nodes[continue_campaign].address=newproxy()
@@ -1573,13 +1593,21 @@ key('script_F2'); assert(spoken()=='Lord and faction details, button, 5 of 6',sp
 key('script_F2'); assert(spoken()=='Start Campaign, button, 6 of 6',spoken())
 -- Details: everything else on the screen, without the choices; Back returns.
 key('script_F3'); key('script_F4'); assert(says('Lord and faction details. ') and says(', 1 of '),spoken())
-local details=0
+assert(says('Lord and faction details. Race Attributes, heading, 1 of '),'Details start with the race attributes: '..spoken())
+local details,heard_details=0,{(spoken())}
 for _=1,60 do
-    key('script_F2'); details=details+1
+    key('script_F2'); details=details+1; heard_details[#heard_details+1]=spoken()
     assert(not says('radio button') and not says('Start Campaign') and not says('combo box'),'Details hold no choices: '..spoken())
     if says('Back, button') then break end
 end
 assert(details>10,'Details read the rest of the screen')
+-- 0.6.65: document order: each heading followed by its own text.
+local function first(prefix) for i,line in ipairs(heard_details) do if line:sub(1,#prefix)==prefix then return i end end end
+assert(first('Race attribute: ')==2,'Race attribute text follows its heading')
+assert(first('Faction effects') and first('Faction effects')>first('Race attribute: '))
+assert(first('Lord effects') and first('Lord effects')>first('Faction effects'))
+assert(first('Additional Starting Units') and first('Additional Starting Units')>first('Lord effects'))
+assert(first('Starting unit: ') and first('Starting unit: ')==first('Additional Starting Units')+1,'Units follow their heading')
 key('script_F4'); assert(spoken()=='Campaign setup. Lord and faction details, button, 5 of 6',spoken())
 -- Backspace from the setup returns to the chosen lord's race.
 back_key(); assert(spoken()=='High Elves. Teclis, radio button, checked, 2 of 4',spoken())
@@ -1651,6 +1679,62 @@ os.clock=function() return 25 end; start(); os.clock=real_clock
 assert(contents('bridge.jsonl'):find('Intro movies playing. Press Escape to skip them.',1,true),'Movies announced at start')
 os.clock=function() return 600 end; start(); os.clock=real_clock
 assert(not contents('bridge.jsonl'):find('Intro movies playing',1,true),'No movie notice after a campaign')
+-- 0.6.66: Load Game (live capture) as two steps: campaign, then save and Load.
+local load_live=dofile('tests/fixtures/load_game_live.lua')
+local load_rows='tree.child2.child1.child0.child0.child0.child0'
+local save_row='tree.child2.child1.child1.child3.child0.child0.child0'
+local load_button='tree.child2.child2.child1.child0.child0'
+local function load_copy(change)
+    local copy={}
+    for prefix,row in pairs(load_live) do local c={}; for k,v in pairs(row) do c[k]=v end; copy[prefix]=c end
+    if change then change(copy) end
+    return copy
+end
+steps_start(load_live)
+key('script_F2'); assert(spoken()=='Load Game. Choose a campaign. Eataine, The Eye of the Vortex, 10/29/2026 5:07:07 PM, turn 1, list item, selected, 1 of 2',spoken())
+key('script_F2'); assert(spoken()=='Eataine, The Eye of the Vortex, 10/29/2026 4:21:40 PM, turn 1, list item, 2 of 2',spoken())
+back_key(); assert(spoken()=='This is the first step. Escape returns to the main menu.',spoken())
+key('script_F3'); key('script_F4')
+assert(says('Saves. Eataine_Auto-save, Normal, turn 1, 10/29/2026 5:07:07 PM, list item, selected, unavailable, 1 of 4, You cannot load this save game.'),spoken())
+no_dispatch('Opening the selected campaign only reads')
+key('script_F4'); assert(says('This save cannot be loaded. You cannot load this save game.'),spoken()); no_dispatch('Invalid save')
+key('script_F2'); assert(spoken()=='Load, button, unavailable, 2 of 4',spoken())
+key('script_F4'); assert(spoken()=='Load is unavailable. Choose a save first.',spoken()); no_dispatch('Load unavailable')
+key('script_F2'); assert(says('Enable all saves, check box, not checked, 3 of 4, Allow the loading'),spoken())
+key('script_F4'); assert(spoken()=='Not supported yet.',spoken()); no_dispatch('The incompatible-saves setting is not changed')
+key('script_F2'); assert(spoken()=='Back, button, 4 of 4',spoken())
+key('script_F4'); assert(spoken()=='Choose a campaign. Eataine, The Eye of the Vortex, 10/29/2026 5:07:07 PM, turn 1, list item, selected, 1 of 2',spoken())
+assert(not contents('bridge.jsonl'):find('Delete',1,true),'The delete button is never offered')
+-- Another campaign: one press selects it; its saves are read by themselves.
+key('script_F2')
+click_hook=function()
+    nodes[load_rows .. '.child0'].data.CurrentState='active'; nodes[load_rows .. '.child1'].data.CurrentState='selected'
+end
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==load_rows .. '.child1',spoken()); click_hook=nil
+ticks_until(5); assert(says('Saves. Eataine_Auto-save'),spoken())
+-- A loadable save: choosing it moves to Load; Load loads with one press.
+local valid=load_copy(function(c)
+    c[save_row].CurrentState='active'; c[save_row].GetTooltipText=''
+    for i=1,4 do c[save_row .. '.child' .. i].CurrentState='NewState' end
+end)
+steps_start(valid); key('script_F2'); key('script_F4')
+assert(says('Saves. Eataine_Auto-save, Normal, turn 1, 10/29/2026 5:07:07 PM, list item, 1 of 4'),spoken())
+click_hook=function()
+    nodes[save_row].data.CurrentState='selected'
+    nodes[load_button].data.CurrentState='active'; nodes[load_button .. '.child1'].data.CurrentState='active'
+end
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==save_row,'Enter selects the save'); click_hook=nil
+ticks_until(5); assert(spoken()=='Eataine_Auto-save, Normal, turn 1, 10/29/2026 5:07:07 PM selected. Load, button, 2 of 4',spoken())
+key('script_F4'); assert(#dispatches==2 and dispatches[2]==load_button and spoken()=='Loading the save. This takes a minute.',spoken())
+-- A Load button replaced between the read and the press is not clicked.
+local ready_to_load=load_copy(function(c)
+    c[save_row].CurrentState='selected'; c[save_row].GetTooltipText=''
+    for i=1,4 do c[save_row .. '.child' .. i].CurrentState='NewState' end
+    c[load_button].CurrentState='active'
+end)
+steps_start(ready_to_load); key('script_F2'); key('script_F4'); key('script_F2'); assert(spoken()=='Load, button, 2 of 4',spoken())
+nodes[load_button].data.Id='other_button'
+key('script_F4'); assert(#dispatches==0 and says('The screen changed. Press F2 and try again.'),spoken())
 -- One repeating key timer, registered once and never from its callback
 -- (0.6.64: re-registering inside the callback silenced the reader live).
 repeating_timer=true
@@ -1663,6 +1747,12 @@ ticks_until(6); assert(spoken()=='Campaign difficulty, list. Normal, selected, 2
 send_keys('companion-steps',{'next'}); assert(spoken()=='Hard, 3 of 6',spoken())
 assert(timer_registrations==1,'Never registered again from the callback')
 assert(contents('native-ui-graphics-preview.log'):find('keys.enabled	string	companion key channel, repeating timer',1,true))
+-- The automation timer too (developer channel): registered once.
+automation_registrations=0
+start(nil,lord_live,true)
+for _=1,5 do assert(automation_poll,'Automation timer stays registered'); automation_poll() end
+local status=auto_request('discover'); assert(status[7]=='discovery-page' or status[7]=='discovery-complete',status[7])
+assert(automation_registrations==1,'Automation timer registered once')
 repeating_timer=false
 single_press, flat_lords = false, true
 io=real_io; os.time=real_time; os.date=real_date

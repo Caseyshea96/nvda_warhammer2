@@ -32,7 +32,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.65 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.66 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -49,8 +49,13 @@ KEYS IN MENUS
   F2 / F3 / F4        also next / previous / activate
 
 STARTING A CAMPAIGN
-  Continue Campaign (main menu) loads your latest save. Load Campaign is
-  not supported yet.
+  Continue Campaign (main menu) loads your latest save.
+  Load Campaign opens Load Game, in two steps (Backspace goes back):
+  1. Choose a campaign: "Eataine, The Eye of the Vortex, date, turn 1".
+  2. Choose a save with Enter, then "Load, button" and Enter. A save that
+     cannot be loaded says why (for example a mod it was made with is
+     missing; saves made before version 0.6.65 need the old mod name, but
+     Continue Campaign still loads them).
   Main menu: New Campaign  ->  Select Campaign: choose The Eye of the
   Vortex or Mortal Empires with Enter, then Continue.
   Select Lord goes one decision at a time (Backspace goes back a step):

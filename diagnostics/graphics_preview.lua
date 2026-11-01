@@ -363,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.65-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.66-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -882,6 +882,7 @@ local function lord_spoken_name(item)
     if item.id=='bullet' and starts_with(item.key,'lord:tree.child2.child0.child2.child1.child2.child1.') then
         return 'Race attribute: ' .. name
     end
+    if item.id=='unit_category_icon' then return 'Starting unit: ' .. name end -- 0.6.65
     if starts_with(item.id,'lord_effect') and starts_with(item.key,'lord:tree.child2.child0.child2.child2.child1.child1.') then
         local group
         for _,other in ipairs((lord_discovery and lord_discovery.raw) or controls) do
@@ -976,6 +977,7 @@ local function announce_control(step)
     local prefix=announce_prefix; announce_prefix=''
     -- Like a screen reader entering a dialog: say the screen name once.
     local title = screen_titles[screen_kind]
+    if screen_kind == 'lord_discovery' and lord_discovery and lord_discovery.kind == 'load' then title = 'Load Game' end
     if title and screen_kind ~= last_screen then
         -- Select Lord steps: "Select Lord. Choose a race. ..."
         if screen_kind == 'lord_discovery' and not lord_flat then prefix = title .. '. ' .. prefix
@@ -1203,7 +1205,8 @@ end
 -- element: same IDs and addresses on its path, visible, same label, interactive
 -- and active.
 local player_targets = {
-    main = {button_new_campaign = 'New Campaign', button_start_campaign = 'Continue Campaign', button_graphics = 'Graphics'},
+    main = {button_new_campaign = 'New Campaign', button_start_campaign = 'Continue Campaign', button_graphics = 'Graphics',
+        button_load_campaign = 'Load Campaign'}, -- 0.6.65: opens the save list
     -- 0.6.64: the campaign radio buttons (The Eye of the Vortex, Mortal Empires).
     campaign_selection = {button_next = 'Continue', button_campaign_entry = 'Campaign'}
 }
@@ -1560,7 +1563,9 @@ local function lord_context()
     local _,panel_id=lord_read(function() local v=panel:Id(); return v end)
     local _,panel_visible=lord_read(function() local v=panel:Visible(true); return v end)
     local _,panel_count=lord_read(function() local v=panel:ChildCount(); return v end)
-    if panel_id~='sp_grand_campaign' or panel_visible~=true or type(panel_count)~='number' or panel_count<1 then
+    -- 0.6.66: the same bounded reader serves Load Game (load_save_game).
+    local panel_kind=(panel_id=='sp_grand_campaign' and 'lord') or (panel_id=='load_save_game' and 'load') or nil
+    if not panel_kind or panel_visible~=true or type(panel_count)~='number' or panel_count<1 then
         return lord_reject('panel id=' .. tostring(panel_id) .. ' visible=' .. tostring(panel_visible) .. ' count=' .. tostring(panel_count))
     end
     local _,root_address=lord_read(function() local v=root:Address(); return v end)
@@ -1568,7 +1573,7 @@ local function lord_context()
     root_address,panel_address=lord_identity(root_address),lord_identity(panel_address)
     if not root_address or not panel_address then return lord_reject('identity unavailable') end
     lord_last_reject=nil
-    return {root=root,root_address=root_address,panel_address=panel_address,generation=generation}
+    return {root=root,root_address=root_address,panel_address=panel_address,generation=generation,kind=panel_kind,panel_id=panel_id}
 end
 local function lord_log(line)
     if not log_path then error('Lord discovery output unavailable') end
@@ -1596,10 +1601,10 @@ local function lord_begin(context)
     lord_run=lord_run+1
     lord_discovery={root_address=context.root_address,panel_address=context.panel_address,
         generation=generation,queue={{path={2},label='tree.child2',ids={}}},head=1,
-        visited=0,page=0,done=false,limited=false,errors=0}
+        visited=0,page=0,done=false,limited=false,errors=0,kind=context.kind or 'lord'}
     screen_kind='lord_discovery'; latest_snapshot=nil
     lord_log('{"kind":"begin","run":' .. lord_run .. ',"generation":' .. generation
-        .. ',"panel":"sp_grand_campaign","read_only":true,"page_budget":48,"node_budget":1536}')
+        .. ',"panel":' .. quote(context.panel_id or 'sp_grand_campaign') .. ',"read_only":true,"page_budget":48,"node_budget":1536}')
     if awaiting_result then log('activation.result_requires_mapping',awaiting_result .. ':lord_discovery'); awaiting_result=nil end
 end
 local function lord_resolve(root,path)
@@ -1734,6 +1739,33 @@ local function lord_page(announce)
                             lord_choice=true,choice_path=path,choice_ids=ids,list_index=item.path[#item.path]}
                     end
                 end
+                -- 0.6.66 Load Game: campaign rows (playthroughN), save rows
+                -- (save_game), the Load button and the incompatible-saves box.
+                -- The delete button is never recorded.
+                if d.kind=='load' then
+                    d.load=d.load or {playthroughs={},saves={},by_label={}}
+                    local load=d.load
+                    local function row(list)
+                        local path={}; for part,value in ipairs(item.path) do path[part]=value end
+                        local record={path=path,ids=ids,id=id,state=state,interactive=values.IsInteractive==true,
+                            tooltip=tooltip,texts={},invalid=false,label=item.label}
+                        list[#list+1]=record; load.by_label[item.label]=record
+                    end
+                    if depth>=2 and ids[depth]=='list_box' and starts_with(id,'playthrough') then row(load.playthroughs)
+                    elseif depth>=2 and ids[depth]=='list_box' and id=='save_game' then row(load.saves)
+                    elseif id=='button_confirm_load' or id=='checkbox_incompatible_saves' then
+                        local path={}; for part,value in ipairs(item.path) do path[part]=value end
+                        load[id]={path=path,ids=ids,id=id,state=state,interactive=values.IsInteractive==true,tooltip=tooltip}
+                    elseif id=='tx_incompatible_saves' then load.incompatible_label,load.incompatible_tip=name,tooltip end
+                    -- Texts inside a row (faction, campaign, date, name, difficulty...).
+                    local parent_label
+                    for at=#item.label,1,-1 do
+                        if string.byte(item.label,at)==46 then parent_label=string.sub(item.label,1,at-1); break end
+                    end
+                    local owner=parent_label and load.by_label[parent_label]
+                    if owner and name~='' then owner.texts[#owner.texts+1]={id=id,text=name} end
+                    if owner and state=='invalid' then owner.invalid=true end
+                end
                 -- 0.6.64: the difficulty combo boxes and, while one is open, its list.
                 local function copy_path() local path={}; for part,value in ipairs(item.path) do path[part]=value end; return path end
                 if id=='dropdown_campaign' or id=='dropdown_battle' then
@@ -1826,7 +1858,57 @@ local function lord_view_item(view,kind,extra)
     for name,value in pairs(extra or {}) do item[name]=value end
     return item
 end
+-- 0.6.66 Load Game as two steps: choose a campaign, then a save and Load.
+local function load_row_name(record)
+    local by={}
+    for _,text in ipairs(record.texts) do by[text.id]=by[text.id] or text.text end
+    local parts={}
+    local function add(value) if value and value~='' then parts[#parts+1]=value end end
+    if by.name then -- a save row
+        add(by.name); add(by.dy_difficulty)
+        if by.turn then add('turn ' .. by.turn) end
+        add(by.save_date)
+    else -- a campaign row
+        add(by.dy_faction); add(by.dy_campaign)
+        if by.dy_date or by.dy_time then add(table.concat({by.dy_date or '',by.dy_time or ''},' '):gsub('^ +',''):gsub(' +$','')) end
+        if by.dy_turns then add('turn ' .. by.dy_turns) end
+    end
+    if #parts==0 then for _,text in ipairs(record.texts) do add(text.text) end end
+    return #parts>0 and table.concat(parts,', ') or record.id
+end
+local function load_build_view(d)
+    local load=d.load or {playthroughs={},saves={}}
+    local view={}
+    if lord_step~='saves' then lord_step='playthroughs' end
+    if lord_step=='playthroughs' then
+        for position,record in ipairs(load.playthroughs) do
+            view[#view+1]=lord_view_item(load_row_name(record),'playthrough',{view_role='list item',row=record,tag=tostring(position),
+                view_states=record.state=='selected' and {'selected'} or {}})
+        end
+    else
+        for position,record in ipairs(load.saves) do
+            local states={}
+            if record.state=='selected' then states[#states+1]='selected' end
+            if record.invalid then states[#states+1]='unavailable' end
+            view[#view+1]=lord_view_item(load_row_name(record),'save',{view_role='list item',row=record,tag=tostring(position),
+                view_states=states,view_description=record.invalid and record.tooltip or nil})
+        end
+        local button=load.button_confirm_load
+        if button then
+            view[#view+1]=lord_view_item('Load','load_button',{view_role='button',tag='load',
+                view_states=(button.state=='inactive' or not button.interactive) and {'unavailable'} or {}})
+        end
+        local box=load.checkbox_incompatible_saves
+        if box then
+            view[#view+1]=lord_view_item(load.incompatible_label~='' and load.incompatible_label or 'Enable all saves','incompatible',{view_role='check box',tag='incompatible',
+                view_states={(box.state=='selected' or box.state=='selected_hover') and 'checked' or 'not checked'},view_description=load.incompatible_tip})
+        end
+        view[#view+1]=lord_view_item('Back','back',{view_role='button',tag='back'})
+    end
+    return view
+end
 local function lord_build_view(d)
+    if d.kind=='load' then return load_build_view(d) end
     local raw=d.raw
     local groups=lord_groups(d); d.groups=groups
     local values={}
@@ -1873,12 +1955,32 @@ local function lord_build_view(d)
         for _,list in pairs(d.popup or {}) do
             for _,node in ipairs(list) do in_popup['lord:' .. node.label .. ':text']=true; in_popup['lord:' .. node.label .. ':tooltip']=true end
         end
+        -- Grouped like a document: each heading followed by its own text
+        -- (the read is breadth-first, so headings came long before their text).
+        -- An item outside the known sections keeps its place at the end.
+        local sections={
+            'lord:tree.child2.child0.child2.child1.child2',      -- race attributes
+            'lord:tree.child2.child0.child2.child2.child1.child1', -- faction and lord effects
+            'lord:tree.child2.child0.child2.child2.child2',      -- additional starting units
+            'lord:tree.child2.child0.child2.child2.child5'}      -- recommended first campaign
+        local function rank(item)
+            for position,prefix in ipairs(sections) do
+                local follows=string.sub(item.key,#prefix+1,#prefix+1)
+                if starts_with(item.key,prefix) and (follows=='.' or follows==':') then return position end
+            end
+            return #sections+1
+        end
+        local chosen={}
         for _,item in ipairs(raw) do
             local field=lord_names[item.key]
             local named=field and field.id==item.id
             if not item.lord_choice and not item.start_campaign and item.id~='checkbox_start_prelude' and not named
-                and item.id~='tx_header' and item.id~='tx_difficulty' and not in_popup[item.key] then view[#view+1]=item end
+                and item.id~='tx_header' and item.id~='tx_difficulty' and not in_popup[item.key] then
+                chosen[#chosen+1]={item=item,rank=rank(item),order=#chosen+1}
+            end
         end
+        table.sort(chosen,function(a,b) if a.rank~=b.rank then return a.rank<b.rank end return a.order<b.order end)
+        for _,entry in ipairs(chosen) do view[#view+1]=entry.item end
         back()
     elseif lord_step=='options' then
         local current=values[lord_step_field=='dropdown_battle' and 'Battle difficulty' or 'Campaign difficulty']
@@ -1898,7 +2000,8 @@ local function lord_resolve_focus(d,view,focus)
     if type(focus)=='number' then return focus end
     for position,item in ipairs(view) do
         if focus=='selected' and ((item.view_kind=='race' and d.groups[item.race] and d.groups[item.race].selected)
-            or (item.lord_choice and item.raw_state=='selected') or (item.view_kind=='option' and item.view_states[1]=='selected')) then
+            or (item.lord_choice and item.raw_state=='selected')
+            or ((item.view_kind=='option' or item.view_kind=='playthrough' or item.view_kind=='save') and item.view_states[1]=='selected')) then
             return position
         end
         if item.key==focus then return position end
@@ -1931,9 +2034,11 @@ local function lord_browse(step)
         end
     end
     local view_d=lord_discovery
-    if not lord_flat and view_d and view_d.done then
+    if view_d and view_d.done and (not lord_flat or view_d.kind=='load') then
         view_d.raw=view_d.raw or controls
-        if lord_step=='races' and last_screen~='lord_discovery' and not lord_focus then
+        if view_d.kind=='load' and lord_step~='playthroughs' and lord_step~='saves' then
+            lord_step,lord_focus,lord_step_prefix='playthroughs','selected','Choose a campaign. ' -- arriving at Load Game
+        elseif view_d.kind~='load' and lord_step=='races' and last_screen~='lord_discovery' and not lord_focus then
             lord_focus,lord_step_prefix='selected','Choose a race. ' -- arriving at Select Lord
         end
         controls=lord_build_view(view_d)
@@ -2025,7 +2130,13 @@ local function lord_selected_group(d)
 end
 local function lord_back()
     local d=lord_discovery
-    if lord_flat or screen_kind~='lord_discovery' or not d then return false end
+    if screen_kind~='lord_discovery' or not d then return false end
+    if d.kind=='load' then
+        if lord_step=='saves' then lord_go('playthroughs',nil,'selected','Choose a campaign. ')
+        else speak('This is the first step. Escape returns to the main menu.') end
+        return true
+    end
+    if lord_flat then return false end
     if lord_step=='races' then speak('This is the first step. Escape returns to Select Campaign.')
     elseif lord_step=='lords' then lord_go('races',nil,'view:race:' .. tostring(lord_step_race),'Choose a race. ')
     elseif lord_step=='setup' then
@@ -2052,6 +2163,25 @@ local function lord_view_activate(item)
     elseif kind=='summary' then lord_go('races',nil,'selected','Choose a race. ')
     elseif kind=='details' then lord_go('details',nil,1,'Lord and faction details. ')
     elseif kind=='back' then lord_back()
+    elseif kind=='playthrough' then
+        -- A campaign: its saves are the next step (clicked first when not selected).
+        if item.row.state=='selected' then lord_go('saves',nil,'selected','Saves. ')
+        elseif lord_click(d,item.row.path,item.row.ids,item.row.id,'Campaign ' .. item.view) then
+            lord_step,lord_focus,lord_step_prefix='saves','selected','Saves. '
+            lord_schedule_reread()
+        end
+    elseif kind=='save' then
+        if item.row.invalid then cancel(); speak('This save cannot be loaded. ' .. (item.row.tooltip or '')); return end
+        if item.row.state=='selected' then lord_go('saves',nil,'view:load_button:load','')
+        elseif lord_click(d,item.row.path,item.row.ids,item.row.id,'Save ' .. item.view) then
+            lord_step,lord_focus,lord_step_prefix='saves','view:load_button:load',item.view .. ' selected. '
+            lord_schedule_reread()
+        end
+    elseif kind=='load_button' then
+        local button=d.load and d.load.button_confirm_load
+        if not button or button.state=='inactive' then cancel(); speak('Load is unavailable. Choose a save first.'); return end
+        if lord_click(d,button.path,button.ids,button.id,'Load') then speak('Loading the save. This takes a minute.') end
+    elseif kind=='incompatible' then cancel(); speak('Not supported yet.')
     elseif kind=='combo' then
         local dd=d and d.dropdowns and d.dropdowns[item.field]
         if not dd then cancel(); speak('Not supported yet.'); return end
@@ -2334,7 +2464,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.65-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.66-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2401,6 +2531,9 @@ local function frontend_callbacks()
         error('Frontend real_timer unavailable')
     end
     local listener_name=auto_name .. '_real_timer'
+    -- 0.6.65: one repeating timer when the game offers it (as the key timer):
+    -- never register from inside the callback.
+    local repeating=type(api.register_repeating)=='function'
     local adapter={active=false}
     function adapter:remove_callback()
         self.active=false
@@ -2416,7 +2549,7 @@ local function frontend_callbacks()
                 if not self.active then return end
                 local ok,err=pcall(function()
                     callback()
-                    if self.active and auto_running then api.register_singleshot(auto_name,interval) end
+                    if not repeating and self.active and auto_running then api.register_singleshot(auto_name,interval) end
                 end)
                 if not ok then
                     auto_running=false; cancel(); interaction_revision=interaction_revision+1
@@ -2429,7 +2562,7 @@ local function frontend_callbacks()
                 end
             end,true)
         api.unregister(auto_name)
-        api.register_singleshot(auto_name,interval)
+        if repeating then api.register_repeating(auto_name,interval) else api.register_singleshot(auto_name,interval) end
     end
     return adapter
 end
@@ -2527,7 +2660,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.65 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.66 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end
