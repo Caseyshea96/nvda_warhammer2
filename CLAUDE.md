@@ -87,6 +87,15 @@ See docs/STANDARD_KEYS_0_6_27.md.
 
 ## Live test scripts (`tools/live/`)
 
+The step-by-step loop (rules, version bump, build, player-path live test,
+freeze handling, shipping) is the project skill
+`.claude/skills/warhammer2-nvda-mod-dev/SKILL.md`. Player-path helpers:
+`Start-Companion` (records the owned companion for Stop-Session),
+`Read-Speech -Since <time> [-Wait <pattern>]`, `Drive-Keys -GamePid -Keys`,
+`Check-Reader` (heartbeat: alive or silent), `Reach-Campaign -GamePid`
+(ready → Continue Campaign → map). `Install-Build` refuses a ZIP older than
+the sources for the version in source (a failed build leaves the old ZIP).
+
 Each takes `-Version 0.6.x` and/or `-Evidence work/live-<version>-<topic>`:
 `Install-Build` (backup + install + hash check; `-Upgrade` installs over the old build like a player) → `Start-Session -Direct`
 (lease, companion, launch with TWMM's mod list) → `Wait-Game` (records owned

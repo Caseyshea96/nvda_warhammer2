@@ -10,6 +10,18 @@ $gamePath = 'C:\Program Files (x86)\Steam\steamapps\common\Total War WARHAMMER I
 $full = "$Version-nvda-automation-preview"
 $zip = Join-Path $repo "artifacts\warhammer2-windows-$full.zip"
 if (-not (Test-Path -LiteralPath $zip)) { throw "Build not found: $zip" }
+# A failed build leaves the previous ZIP behind: for the version in source,
+# refuse a ZIP older than the sources it is built from (older versions, e.g.
+# a rollback test, are installed as they are).
+$sourceVersion = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'tools\package-pilot.py') -Raw), 'version = "([0-9.]+)-nvda').Groups[1].Value
+if ($Version -eq $sourceVersion) {
+    $built = (Get-Item -LiteralPath $zip).LastWriteTimeUtc
+    $newer = @('diagnostics\graphics_preview.lua','diagnostics\campaign_readonly.lua','packaging\interactive\GRAPHICS_PREVIEW.txt') |
+        ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) }
+    $newer += Get-ChildItem -LiteralPath (Join-Path $repo 'companion'), (Join-Path $repo 'packaging\pilot') -File
+    $stale = $newer | Where-Object { $_.LastWriteTimeUtc -gt $built }
+    if ($stale) { throw ('The ZIP is older than ' + (($stale | ForEach-Object Name) -join ', ') + '; rebuild (did the build fail?).') }
+}
 if (Get-CimInstance Win32_Process -Filter "Name='Warhammer2.exe'") { throw 'Game is running; no update performed.' }
 if (Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*WarhammerAccess\App\Companion.ps1*' }) {
     throw 'Companion is running; no update performed.'
