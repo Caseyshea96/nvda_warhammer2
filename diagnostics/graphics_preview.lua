@@ -45,6 +45,16 @@ local lord_resume_key, quiet_announce = nil, false
 local last_screen -- screen whose title was last spoken
 local nav_target -- 'first', 'last' or {letter=x} for the next announcement
 local lord_awaiting -- lord name sent by the last selection, until observed
+-- 0.6.64: Select Lord as a sequence of choices (trial run 3: one list of 50
+-- items was hard to use). Steps: races -> lords -> setup; setup leads to
+-- details and to a difficulty's options. Backspace goes back a step.
+local lord_step, lord_step_race, lord_step_field = 'races', nil, nil
+local lord_focus, lord_step_prefix = nil, '' -- position and words for the next read
+local lord_reread_at, lord_reread_left = nil, 0 -- key-timer tick for a read after a click
+local function lord_steps_reset()
+    lord_step, lord_step_race, lord_step_field, lord_focus, lord_step_prefix = 'races', nil, nil, nil, ''
+    lord_reread_at, lord_reread_left = nil, 0
+end
 local screen_kind, awaiting_result = 'unknown', nil
 local function cancel() pending = nil end
 local function invalidate()
@@ -319,11 +329,19 @@ local function quote(v)
     end) .. '"'
 end
 local function append(path, line)
+    local mode = 'a'
     if path == log_path then
         log_bytes = log_bytes + #line + 2 -- conservatively include Windows CRLF
-        if log_bytes > 2097152 then log_failed = true; return end
+        if log_bytes > 2097152 then
+            -- 0.6.64: start the log again at its cap (as the campaign reader
+            -- does) instead of treating a full log as unavailable: a long
+            -- session (live: repeated re-reads) refused every activation.
+            local header = 'WH2 native UI diagnostic (restarted at 2 MiB)\n'
+            line = header .. 'log.restarted\tstring\tcap\n' .. line
+            log_bytes, mode = #line + 2, 'w'
+        end
     end
-    local f = io.open(path, 'a')
+    local f = io.open(path, mode)
     if not f then if path == log_path then log_failed = true end; return end
     local written = f:write(line .. '\n'); local closed = f:close()
     if path == log_path and (not written or closed == nil) then log_failed = true end
@@ -345,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.63-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.64-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'jaws_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -370,6 +388,13 @@ local confirm_activations = false
 if log_path then
     local flag = io.open(string.sub(log_path, 1, #log_path - #'native-ui-graphics-preview.log') .. 'confirm-activations.flag', 'r')
     if flag then flag:close(); confirm_activations = true end
+end
+-- 0.6.64: Select Lord is read as steps (race, lord, setup). A
+-- lord-list-flat.flag beside the log restores the single list of 0.6.63.
+local lord_flat = false
+if log_path then
+    local flag = io.open(string.sub(log_path, 1, #log_path - #'native-ui-graphics-preview.log') .. 'lord-list-flat.flag', 'r')
+    if flag then flag:close(); lord_flat = true end
 end
 -- Opt-in confirmation probe, off unless string-find-probe.flag sits beside
 -- the log. It may break later string calls, so run it in a separate launch.
@@ -595,8 +620,10 @@ local function scope_advanced_controls()
 end
 
 local function scope_controls()
-    if visible_id(graphics_panel, 'campaign_select') then scope_campaign_controls(); return end
+    -- Back on another menu: Select Lord starts again at the race.
+    if visible_id(graphics_panel, 'campaign_select') then lord_steps_reset(); scope_campaign_controls(); return end
     if visible_id(graphics_panel, 'main') then
+        lord_steps_reset()
         screen_kind = 'main'
         return
     end
@@ -824,6 +851,28 @@ local lord_names={
     ['lord:tree.child2.child0.child2.child2.child3.child2.child0.child0:text']={id='dy_selected_txt',label='Campaign difficulty'},
     ['lord:tree.child2.child0.child2.child2.child3.child2.child1.child0:text']={id='dy_selected_txt',label='Battle difficulty'}
 }
+-- 0.6.64: the lord list has no race names, only blank separators between the
+-- races. A group is named after a lord it contains; an unknown group is
+-- "Other lords" (English names, as the game shows them).
+local lord_races={}
+for race,names in pairs({
+    ['High Elves']={'Tyrion','Teclis','Alarielle the Radiant','Alith Anar','Eltharion the Grim','Imrik','Prince Imrik'},
+    ['Lizardmen']={'Lord Mazdamundi','Kroq-Gar','Tehenhauin',"Tiktaq'to",'Lord Kroak','Nakai the Wanderer','Gor-Rok','Oxyotl'},
+    ['Dark Elves']={'Malekith','Morathi','Crone Hellebron','Lokhir Fellheart','Malus Darkblade','Rakarth'},
+    ['Skaven']={'Queek Headtaker','Lord Skrolk','Tretch Craventail','Ikit Claw','Deathmaster Snikch','Throt the Unclean'},
+    ['Vampire Coast']={'Luthor Harkon','Count Noctilus','Aranessa Saltspite','Cylostra Direfin'},
+    ['Tomb Kings']={'Settra the Imperishable','Grand Hierophant Khatep','High Queen Khalida','Arkhan the Black'},
+    ['The Empire']={'Karl Franz','Balthasar Gelt','Volkmar the Grim','Markus Wulfhart'},
+    ['Bretonnia']={'Louen Leoncoeur','Alberic de Bordeleaux','Fay Enchantress','Repanse de Lyonesse'},
+    ['Beastmen']={'Khazrak the One-Eye','Malagor the Dark Omen','Morghur the Shadowgave','Taurox the Brass Bull'},
+    ['Dwarfs']={'Thorgrim Grudgebearer','Ungrim Ironfist','Belegar Ironhammer','Grombrindal','Thorek Ironbrow'},
+    ['Greenskins']={'Grimgor Ironhide','Azhag the Slaughterer','Skarsnik','Wurrzag','Grom the Paunch'},
+    ['Wood Elves']={'Orion','Durthu','Drycha','Sisters of Twilight'},
+    ['Vampire Counts']={'Mannfred von Carstein','Vlad von Carstein','Heinrich Kemmler','Isabella von Carstein','Helman Ghorst'},
+    ['Warriors of Chaos']={'Archaon the Everchosen','Kholek Suneater','Prince Sigvald','Prince Sigvald the Magnificent'},
+    ['Norsca']={'Wulfrik the Wanderer','Throgg'}}) do
+    for _,name in ipairs(names) do lord_races[name]=race end
+end
 local function lord_spoken_name(item)
     local name=item.raw_name or item.name
     local field=lord_names[item.key]
@@ -835,7 +884,7 @@ local function lord_spoken_name(item)
     end
     if starts_with(item.id,'lord_effect') and starts_with(item.key,'lord:tree.child2.child0.child2.child2.child1.child1.') then
         local group
-        for _,other in ipairs(controls) do
+        for _,other in ipairs((lord_discovery and lord_discovery.raw) or controls) do
             if other.raw_state=='faction_traits' then group='Faction effect'
             elseif other.raw_state=='lord_traits' then group='Lord effect' end
             if other==item then break end
@@ -857,6 +906,7 @@ end
 local function describe(item)
     if screen_kind == 'main' then return item.name, 'button', nil, engine_states(item.state) end
     if screen_kind == 'lord_discovery' then
+        if item.view then return item.view, item.view_role, item.view_value, item.view_states or {}, item.view_description end
         local raw = item.raw_name or item.name
         local selected = item.raw_state == 'selected'
         if item.lord_choice then return item.id, 'radio button', nil, {selected and 'checked' or 'not checked'} end
@@ -906,6 +956,7 @@ local function announce_control(step)
     local target = nav_target; nav_target = nil
     if target == 'first' then control_index = 1
     elseif target == 'last' then control_index = #controls
+    elseif type(target) == 'number' then control_index = math.max(1, math.min(target, #controls)) -- a new Select Lord step
     elseif type(target) == 'table' then
         -- First-letter navigation: next item whose name starts with the
         -- letter, wrapping; no match leaves the focus where it is, silently.
@@ -925,7 +976,11 @@ local function announce_control(step)
     local prefix=announce_prefix; announce_prefix=''
     -- Like a screen reader entering a dialog: say the screen name once.
     local title = screen_titles[screen_kind]
-    if title and screen_kind ~= last_screen then prefix = prefix .. title .. '. ' end
+    if title and screen_kind ~= last_screen then
+        -- Select Lord steps: "Select Lord. Choose a race. ..."
+        if screen_kind == 'lord_discovery' and not lord_flat then prefix = title .. '. ' .. prefix
+        else prefix = prefix .. title .. '. ' end
+    end
     last_screen = screen_kind
     if quiet_announce then return end
     speak(prefix .. spoken_item(item, control_index, #controls))
@@ -1149,7 +1204,8 @@ end
 -- and active.
 local player_targets = {
     main = {button_new_campaign = 'New Campaign', button_start_campaign = 'Continue Campaign', button_graphics = 'Graphics'},
-    campaign_selection = {button_next = 'Continue'}
+    -- 0.6.64: the campaign radio buttons (The Eye of the Vortex, Mortal Empires).
+    campaign_selection = {button_next = 'Continue', button_campaign_entry = 'Campaign'}
 }
 local function path_reads(key)
     local function value(prefix, method)
@@ -1269,6 +1325,11 @@ local function activate_player_target(item)
     local leaf_id = before_steps[#before_steps].id
     local name = player_targets[screen_kind] and player_targets[screen_kind][leaf_id]
     if not complete or not name then cancel(); speak('Not supported yet.'); return end
+    local radio = leaf_id == 'button_campaign_entry'
+    if radio then
+        name = item.label or name
+        if before_leaf.state == 'selected' then cancel(); speak(name .. ' is already selected.'); return end
+    end
     if before_leaf.state ~= 'active' or before_leaf.interactive ~= true then cancel(); speak(name .. ' is unavailable.'); return end
     if not no_extra_panel() then cancel(); speak('Could not read this screen. Press F2 and try again.'); return end
     local kind, selected_index, selected_generation = screen_kind, control_index, generation
@@ -1299,7 +1360,7 @@ local function activate_player_target(item)
     end
     if log_failed then invalidate(); speak('Accessibility log unavailable. Restart the game.'); return end
     send_click(node, name)
-    speak(name .. ' activated.')
+    speak(radio and (name .. ' selected.') or (name .. ' activated.'))
 end
 local function activate_control()
     if screen_kind == 'graphics_advanced' or screen_kind == 'graphics_advanced_overlay' then cancel(); speak('Not supported yet.'); return end
@@ -1393,9 +1454,13 @@ local function screen_still_current()
         local shell_ok, shell_same = observe('navigation.campaign.shell', function()
             local count = node:ChildCount()
             if count ~= root_reads.ChildCount.value then return false end
-            if count == 6 then
-                local extra = UIComponent(node:Find(5))
-                if extra:Id() ~= 'Tooltip' or extra:Visible(true) ~= false or extra:IsInteractive() ~= false then return false end
+            -- 0.6.64: extra root layers must stay hidden, whatever their name.
+            -- Back from Select Lord a hidden tooltip_campaign_select_lord layer
+            -- sits here (seen live); requiring "Tooltip" made every arrow key
+            -- re-read the screen from the first item.
+            for index = 5, count - 1 do
+                local extra = UIComponent(node:Find(index))
+                if extra:Visible(true) ~= false then return false end
             end
             local count_panel = panel:ChildCount()
             return count_panel == panel_reads.ChildCount.value
@@ -1655,15 +1720,36 @@ local function lord_page(announce)
                 for part,value in ipairs(item.ids or {}) do child_ids[part]=value end
                 child_ids[#child_ids+1]=id
                 local ids,depth=item.ids or {},#(item.ids or {})
-                if depth>=4 and ids[depth]=='list_box' and ids[depth-1]=='list_clip' and ids[depth-2]=='list'
-                    and ids[depth-3]=='lord_select_list' and id~='' and id~='race_spacer' and id~='show_all_dlc'
+                local in_lord_list=depth>=4 and ids[depth]=='list_box' and ids[depth-1]=='list_clip' and ids[depth-2]=='list'
+                    and ids[depth-3]=='lord_select_list'
+                -- 0.6.64: the blank race_spacer entries separate the races in the lord list.
+                if in_lord_list and id=='race_spacer' then d.spacers=d.spacers or {}; d.spacers[item.path[#item.path]]=true end
+                if in_lord_list and id~='' and id~='race_spacer' and id~='show_all_dlc'
                     and (state=='active' or state=='selected' or state=='hover') and values.IsInteractive==true then
                     if #controls>=512 then d.limited=true else
                         local path={}
                         for part,value in ipairs(item.path) do path[part]=value end
                         controls[#controls+1]={key='lord:' .. item.label .. ':choice',name='Lord choice: ' .. id,
                             state=state=='selected' and 'selected' or '',read_only=false,id=id,raw_state=state,
-                            lord_choice=true,choice_path=path,choice_ids=ids}
+                            lord_choice=true,choice_path=path,choice_ids=ids,list_index=item.path[#item.path]}
+                    end
+                end
+                -- 0.6.64: the difficulty combo boxes and, while one is open, its list.
+                local function copy_path() local path={}; for part,value in ipairs(item.path) do path[part]=value end; return path end
+                if id=='dropdown_campaign' or id=='dropdown_battle' then
+                    d.dropdowns=d.dropdowns or {}
+                    d.dropdowns[id]={path=copy_path(),ids=ids,state=state,interactive=values.IsInteractive==true}
+                end
+                for part=1,depth do
+                    local owner=ids[part]
+                    -- Everything inside the combo box except its own value and label.
+                    if (owner=='dropdown_campaign' or owner=='dropdown_battle')
+                        and not (part==depth and (id=='dy_selected_txt' or id=='tx')) then
+                        d.popup=d.popup or {}
+                        local list=d.popup[owner] or {}; d.popup[owner]=list
+                        list[#list+1]={path=copy_path(),ids=ids,id=id,text=name,label=item.label,interactive=values.IsInteractive==true,
+                            state=state,children=count,parent_id=parent_id}
+                        break
                     end
                 end
                 if #item.path>=16 and count>0 then d.limited=true
@@ -1698,7 +1784,7 @@ end
 -- Re-read only the watched named fields (at most five short paths). Returns
 -- the label of the first field that changed, vanished or failed to read.
 local function lord_changed_field(context)
-    for _,item in ipairs(controls) do
+    for _,item in ipairs((lord_discovery and lord_discovery.raw) or controls) do
         if item.watch_path then
             local node=lord_resolve(context.root,item.watch_path)
             if not node then return item.watch_text end
@@ -1707,6 +1793,117 @@ local function lord_changed_field(context)
         end
     end
     return nil
+end
+-- 0.6.64: the steps are views over the same complete read (d.raw); choosing
+-- still goes through the raw items and their checks.
+local function lord_groups(d)
+    local groups,current,last_index={},nil,nil
+    for _,item in ipairs(d.raw) do
+        if item.lord_choice then
+            local split=not current
+            if current and last_index and item.list_index then
+                for index=last_index+1,item.list_index-1 do
+                    if d.spacers and d.spacers[index] then split=true; break end
+                end
+            end
+            if split then current={lords={}}; groups[#groups+1]=current end
+            current.lords[#current.lords+1]=item
+            last_index=item.list_index
+            if item.raw_state=='selected' then current.selected=#current.lords end
+        end
+    end
+    local unknown=0
+    for _,group in ipairs(groups) do
+        for _,lord in ipairs(group.lords) do
+            if lord_races[lord.id] then group.name=lord_races[lord.id]; break end
+        end
+        if not group.name then unknown=unknown+1; group.name='Other lords' .. (unknown>1 and (' ' .. unknown) or '') end
+    end
+    return groups
+end
+local function lord_view_item(view,kind,extra)
+    local item={key='view:' .. kind .. ':' .. ((extra and extra.tag) or view),view=view,view_kind=kind,read_only=false,state=''}
+    for name,value in pairs(extra or {}) do item[name]=value end
+    return item
+end
+local function lord_build_view(d)
+    local raw=d.raw
+    local groups=lord_groups(d); d.groups=groups
+    local values={}
+    for _,item in ipairs(raw) do
+        local field=lord_names[item.key]
+        if field and field.id==item.id and item.watch_text then values[field.label]=item.watch_text end
+    end
+    local view={}
+    local function back() view[#view+1]=lord_view_item('Back','back',{view_role='button',tag='back'}) end
+    if lord_step=='lords' and not groups[lord_step_race or 0] then lord_step='races' end
+    if lord_step=='races' then
+        for index,group in ipairs(groups) do
+            local n=#group.lords
+            view[#view+1]=lord_view_item(group.name .. ', ' .. n .. (n==1 and ' lord' or ' lords'),'race',{race=index,tag=tostring(index)})
+        end
+    elseif lord_step=='lords' then
+        for _,lord in ipairs(groups[lord_step_race].lords) do view[#view+1]=lord end
+        back()
+    elseif lord_step=='setup' then
+        local lord,race=values['Selected lord'],values['Race']
+        for _,group in ipairs(groups) do
+            if group.selected then
+                lord=lord or group.lords[group.selected].id
+                if not race and not starts_with(group.name,'Other lords') then race=group.name end
+            end
+        end
+        local who={lord or 'none chosen'}
+        if race then who[#who+1]=race end
+        if values['Faction'] then who[#who+1]=values['Faction'] end
+        view[#view+1]=lord_view_item('Lord: ' .. table.concat(who,', '),'summary',{view_role='button',tag='summary'})
+        for _,spec in ipairs({{'Campaign difficulty','dropdown_campaign'},{'Battle difficulty','dropdown_battle'}}) do
+            local dd=d.dropdowns and d.dropdowns[spec[2]]
+            if dd or values[spec[1]] then
+                local usable=dd and dd.interactive and dd.state~='inactive'
+                view[#view+1]=lord_view_item(spec[1],'combo',{view_role='combo box',view_value=values[spec[1]] or 'value unavailable',
+                    view_states=usable and {} or {'unavailable'},field=spec[2],tag=spec[2]})
+            end
+        end
+        for _,item in ipairs(raw) do if item.id=='checkbox_start_prelude' then view[#view+1]=item; break end end
+        view[#view+1]=lord_view_item('Lord and faction details','details',{view_role='button',tag='details'})
+        for _,item in ipairs(raw) do if item.start_campaign then view[#view+1]=item; break end end
+    elseif lord_step=='details' then
+        local in_popup={}
+        for _,list in pairs(d.popup or {}) do
+            for _,node in ipairs(list) do in_popup['lord:' .. node.label .. ':text']=true; in_popup['lord:' .. node.label .. ':tooltip']=true end
+        end
+        for _,item in ipairs(raw) do
+            local field=lord_names[item.key]
+            local named=field and field.id==item.id
+            if not item.lord_choice and not item.start_campaign and item.id~='checkbox_start_prelude' and not named
+                and item.id~='tx_header' and item.id~='tx_difficulty' and not in_popup[item.key] then view[#view+1]=item end
+        end
+        back()
+    elseif lord_step=='options' then
+        local current=values[lord_step_field=='dropdown_battle' and 'Battle difficulty' or 'Campaign difficulty']
+        for position,node in ipairs((d.popup and d.popup[lord_step_field]) or {}) do
+            if node.text~='' then
+                view[#view+1]=lord_view_item(node.text,'option',{node=node,tag=tostring(position),
+                    view_states=node.text==current and {'selected'} or {}})
+            end
+        end
+        back()
+    end
+    return view
+end
+-- Where to stand after a step change: a number, 'selected' (the chosen lord
+-- or its race) or an item key.
+local function lord_resolve_focus(d,view,focus)
+    if type(focus)=='number' then return focus end
+    for position,item in ipairs(view) do
+        if focus=='selected' and ((item.view_kind=='race' and d.groups[item.race] and d.groups[item.race].selected)
+            or (item.lord_choice and item.raw_state=='selected') or (item.view_kind=='option' and item.view_states[1]=='selected')) then
+            return position
+        end
+        if item.key==focus then return position end
+    end
+    return 1
 end
 local function lord_browse(step)
     local context=lord_context()
@@ -1732,6 +1929,17 @@ local function lord_browse(step)
         for _=1,40 do
             if lord_page(false)=='blocked' or not lord_discovery or lord_discovery.done then break end
         end
+    end
+    local view_d=lord_discovery
+    if not lord_flat and view_d and view_d.done then
+        view_d.raw=view_d.raw or controls
+        if lord_step=='races' and last_screen~='lord_discovery' and not lord_focus then
+            lord_focus,lord_step_prefix='selected','Choose a race. ' -- arriving at Select Lord
+        end
+        controls=lord_build_view(view_d)
+        if lord_focus then nav_target=lord_resolve_focus(view_d,controls,lord_focus); lord_focus=nil end
+        if lord_step_prefix~='' then announce_prefix=announce_prefix .. lord_step_prefix; lord_step_prefix='' end
+        if control_index>#controls then control_index=0 end
     end
     if #controls==0 then
         speak('This screen has no readable text.')
@@ -1773,7 +1981,7 @@ end
 -- "Start the campaign as Tyrion, High Elves, Eataine?" from the captured fields.
 local function start_prompt()
     local values={}
-    for _,other in ipairs(controls) do
+    for _,other in ipairs((lord_discovery and lord_discovery.raw) or controls) do
         local field=lord_names[other.key]
         if field and other.watch_text then values[field.label]=other.watch_text end
     end
@@ -1782,11 +1990,104 @@ local function start_prompt()
     local who=#parts>0 and (' as ' .. table.concat(parts,', ')) or ''
     return 'Start the campaign' .. who .. '? Press Enter again to start.'
 end
+-- 0.6.64 steps: move between steps, open a difficulty list, choose an option.
+local function lord_go(step,race,focus,prefix)
+    lord_step,lord_focus,lord_step_prefix=step,focus or 1,prefix or ''
+    if race then lord_step_race=race end
+    lord_browse(0)
+end
+-- A read shortly after a click, from the key timer, so the result is spoken
+-- without another key press (the click takes effect after this handler).
+local function lord_schedule_reread() lord_reread_at,lord_reread_left=5,8 end
+-- Click a recorded element after checking the screen and its ID chain again.
+local function lord_click(d,path,ids,leaf,label)
+    local context=lord_context()
+    if not d or not d.done or d.limited then
+        cancel(); speak(d and d.done and 'This screen could not be read completely, so choosing is unavailable.'
+            or 'Still reading this screen. Press F2, then try again.'); return false
+    end
+    if not context or d.generation~=generation or context.root_address~=d.root_address or context.panel_address~=d.panel_address then
+        log('activation.lord_blocked','context'); invalidate(); speak('The screen changed. Press F2 and try again.'); return false
+    end
+    local node,reason=lord_resolve_checked(context.root,path,ids,leaf)
+    if not node then invalidate(); log('activation.lord_unverified',reason); speak('The screen changed. Press F2 and try again.'); return false end
+    local interactive_ok,interactive=lord_read(function() local v=node:IsInteractive(); return v end)
+    local state_ok,state=lord_read(function() local v=node:CurrentState(); return v end)
+    if not interactive_ok or interactive~=true or not state_ok or state=='inactive' or type(state)~='string' then
+        log('activation.lord_blocked','state:' .. tostring(state)); invalidate(); speak(label .. ' is unavailable.'); return false
+    end
+    if log_failed then invalidate(); speak('Accessibility log unavailable. Restart the game.'); return false end
+    send_click(node,label)
+    return true
+end
+local function lord_selected_group(d)
+    for index,group in ipairs(d.groups or {}) do if group.selected then return index,group end end
+end
+local function lord_back()
+    local d=lord_discovery
+    if lord_flat or screen_kind~='lord_discovery' or not d then return false end
+    if lord_step=='races' then speak('This is the first step. Escape returns to Select Campaign.')
+    elseif lord_step=='lords' then lord_go('races',nil,'view:race:' .. tostring(lord_step_race),'Choose a race. ')
+    elseif lord_step=='setup' then
+        local index,group=lord_selected_group(d)
+        if index then lord_go('lords',index,'selected',group.name .. '. ') else lord_go('races',nil,'selected','Choose a race. ') end
+    elseif lord_step=='details' then lord_go('setup',nil,'view:details:details','Campaign setup. ')
+    elseif lord_step=='options' then
+        -- The list is open in the game: close it by clicking the combo box again.
+        local field=lord_step_field
+        local dd=d.dropdowns and d.dropdowns[field]
+        if dd and lord_click(d,dd.path,dd.ids,field,'Close list') then
+            lord_step,lord_focus,lord_step_prefix='setup','view:combo:' .. field,''
+            lord_schedule_reread()
+        elseif not dd then lord_go('setup',nil,'view:combo:' .. tostring(field),'') end
+    end
+    return true
+end
+local function lord_view_activate(item)
+    local d=lord_discovery
+    local kind=item.view_kind
+    if kind=='race' then
+        local group=d and d.groups and d.groups[item.race]
+        if group then lord_go('lords',item.race,'selected',group.name .. '. ') end
+    elseif kind=='summary' then lord_go('races',nil,'selected','Choose a race. ')
+    elseif kind=='details' then lord_go('details',nil,1,'Lord and faction details. ')
+    elseif kind=='back' then lord_back()
+    elseif kind=='combo' then
+        local dd=d and d.dropdowns and d.dropdowns[item.field]
+        if not dd then cancel(); speak('Not supported yet.'); return end
+        if lord_click(d,dd.path,dd.ids,item.field,item.view .. ' list') then
+            lord_step,lord_step_field,lord_focus,lord_step_prefix='options',item.field,'selected',item.view .. ', list. '
+            lord_schedule_reread()
+        end
+    elseif kind=='option' then
+        -- The text may sit on a child of the clickable option: use the nearest
+        -- interactive element, the text node or its parent.
+        local node=item.node
+        local path,ids,leaf=node.path,node.ids,node.id
+        if not node.interactive and #path>1 then
+            path,ids={},{}
+            for part=1,#node.path-1 do path[part]=node.path[part] end
+            for part=1,#node.ids-1 do ids[part]=node.ids[part] end
+            leaf=node.ids[#node.ids]
+        end
+        local field=lord_step_field
+        if lord_click(d,path,ids,leaf,item.view) then
+            lord_step,lord_focus,lord_step_prefix='setup','view:combo:' .. tostring(field),''
+            lord_schedule_reread()
+        end
+    end
+end
 local function lord_activate()
     local item,d=controls[control_index],lord_discovery
+    if item.view_kind then lord_view_activate(item); return end
     local starting=item.start_campaign==true
     local prelude=item.prelude==true
-    if not starting and not prelude and item.raw_state=='selected' then cancel(); speak(item.id .. ' is already selected.'); return end
+    if not starting and not prelude and item.raw_state=='selected' then
+        cancel()
+        if lord_flat then speak(item.id .. ' is already selected.')
+        else lord_go('setup',nil,'view:summary:summary',item.id .. ' is already selected. Campaign setup. ') end
+        return
+    end
     if not d or not d.done or d.limited then
         cancel(); speak(d and d.done and 'This screen could not be read completely, so choosing is unavailable.'
             or 'Still reading this screen. Press F2, then try again.'); return
@@ -1827,7 +2128,7 @@ local function lord_activate()
     if log_failed then invalidate(); speak('Accessibility log unavailable. Restart the game.'); return end
     if starting then
         send_click(node,'Start Campaign')
-        speak('Starting the campaign. The campaign map cannot be read yet.')
+        speak('Starting the campaign. An intro movie plays first; press Escape to skip it.')
         return
     end
     if prelude then
@@ -1840,6 +2141,11 @@ local function lord_activate()
     lord_awaiting=item.id
     send_click(node,'Lord choice: ' .. item.id)
     speak(item.id .. ' chosen.')
+    if not lord_flat then
+        -- Next decision: the campaign setup, read once the choice shows.
+        lord_step,lord_focus,lord_step_prefix='setup','view:summary:summary','Campaign setup. '
+        lord_schedule_reread()
+    end
 end
 
 local function lifecycle(name)
@@ -1873,6 +2179,7 @@ core:add_listener('graphics_preview_shortcut_trace', 'ShortcutTriggered', true,
 -- The driver never synthesizes or reports a ShortcutTriggered event.
 local function navigate(shortcut, source)
     interaction_revision = interaction_revision + 1
+    lord_reread_at = nil -- this key reads the screen itself
     log('navigation.source', source)
     log('navigation.received', shortcut)
     log('navigation.cached', type(captured) .. ':' .. tostring(captured))
@@ -1900,6 +2207,7 @@ local function navigate(shortcut, source)
 end
 local function request_activation(source)
     interaction_revision = interaction_revision + 1
+    lord_reread_at = nil
     activation_origin, activation_outcome = source, 'blocked'
     if lord_resume_key and #controls==0 then
         -- Enter straight after toggling: read the screen again quietly, back on the check box.
@@ -1908,7 +2216,7 @@ local function request_activation(source)
     local lord_mode=lord_discovery or screen_kind=='lord_discovery'
     if lord_mode then
         local item=controls[control_index]
-        if not (item and (item.lord_choice or item.start_campaign or item.prelude)) then
+        if not (item and (item.lord_choice or item.start_campaign or item.prelude or item.view_kind)) then
             cancel()
             local _, role = describe(item or {})
             if item and role and role ~= 'heading' then speak('Not supported yet.') end
@@ -2026,7 +2334,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.63-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.64-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2190,6 +2498,12 @@ end
 local ready_spoken = false
 local function key_action(action)
     ready_spoken = true
+    if action == 'back' then
+        interaction_revision = interaction_revision + 1; cancel(); lord_reread_at = nil
+        local ok, err = pcall(lord_back)
+        if not ok then invalidate(); plain_log('keys.back_error', type(err) == 'string' and err or type(err)); speak('Could not read this screen.') end
+        return
+    end
     if action == 'next' then navigate('script_F2', 'keys')
     elseif action == 'previous' then navigate('script_F3', 'keys')
     elseif action == 'first' then nav_target = 'first'; navigate('script_F2', 'keys')
@@ -2213,7 +2527,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.63 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.64 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end
@@ -2226,9 +2540,21 @@ local function ready_tick()
     ready_ticks = ready_ticks + 1
     if ready_ticks >= 15 then announce_ready() end
 end
+local function lord_reread_tick()
+    if not lord_reread_at then return end
+    lord_reread_at = lord_reread_at - 1
+    if lord_reread_at > 0 then return end
+    lord_reread_at = nil
+    interaction_revision = interaction_revision + 1; cancel()
+    local ok, shown = pcall(lord_browse, 0)
+    if not ok then plain_log('lord.reread_error', type(shown) == 'string' and shown or type(shown)); return end
+    -- Not readable yet (the game still changing the screen): try again shortly.
+    if not shown and lord_reread_left > 0 then lord_reread_left = lord_reread_left - 1; lord_reread_at = 3 end
+end
 local function poll_keys()
     keys_ticks = keys_ticks + 1
     ready_tick()
+    lord_reread_tick()
     poll_key_events()
     publish_reader_state(false) -- after the events, so screen changes show at once
 end
@@ -2277,6 +2603,12 @@ local function start_keys()
     end
     keys_base = string.sub(log_path, 1, #log_path - #suffix)
     keys_running = true
+    -- 0.6.64: one repeating timer, registered once here. Registering the next
+    -- single shot inside the callback (as before) can wipe the game's timer
+    -- list while it dispatches timers: seen live when a difficulty list opened
+    -- (the reader went silent for good), as with the campaign reader in 0.6.58.
+    -- Single shots remain only where the game offers no repeating timer.
+    local repeating = type(api.register_repeating) == 'function'
     core:add_listener(keys_name .. '_real_timer', 'RealTimeTrigger',
         function(context) return context.string == keys_name end,
         function()
@@ -2285,14 +2617,18 @@ local function start_keys()
             if ok then keys_errors = 0 else
                 keys_errors = keys_errors + 1
                 if keys_errors <= 3 then plain_log('keys.ERROR', type(err) == 'string' and err or type(err)) end
-                if keys_errors >= 20 then keys_running = false; plain_log('keys.disabled', 'repeated errors'); return end
+                if keys_errors >= 20 then
+                    keys_running = false; plain_log('keys.disabled', 'repeated errors')
+                    if repeating then pcall(function() api.unregister(keys_name) end) end
+                    return
+                end
             end
-            pcall(function() api.register_singleshot(keys_name, 100) end)
+            if not repeating then pcall(function() api.register_singleshot(keys_name, 100) end) end
         end, true)
     api.unregister(keys_name)
-    api.register_singleshot(keys_name, 100)
+    if repeating then api.register_repeating(keys_name, 100) else api.register_singleshot(keys_name, 100) end
     publish_reader_state(true)
-    plain_log('keys.enabled', 'companion key channel')
+    plain_log('keys.enabled', repeating and 'companion key channel, repeating timer' or 'companion key channel, single-shot timer')
 end
 local function start_keys_guarded()
     local ok, err = pcall(start_keys)
@@ -2302,5 +2638,15 @@ core:add_listener('graphics_preview_automation_init','FrontendScreenTransition',
     function() if start_automation then start_automation() end; start_keys_guarded() end,true)
 start_automation()
 start_keys_guarded()
-if not keys_running then announce_ready() end
+if not keys_running then announce_ready()
+else
+    -- 0.6.64: the script loads during the splash, just before the intro
+    -- movies; only at game start (about 25 s after launch, seen live), not when
+    -- the menu reloads after a campaign. "ready" follows when the menu is up.
+    local ok, seconds = pcall(function() local v = os.clock(); return v end)
+    if ok and type(seconds) == 'number' and seconds == seconds and seconds >= 0 and seconds < 90 then
+        plain_log('startup.movies', tostring(seconds))
+        speak('Intro movies playing. Press Escape to skip them.')
+    end
+end
 

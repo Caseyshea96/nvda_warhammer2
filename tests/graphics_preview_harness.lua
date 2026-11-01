@@ -14,6 +14,9 @@ local automation_poll, automation_timer, automation_base, automation_status_fail
 local scenarios = 0
 local probe_flag = false
 local single_press = false -- tests of default single-press activation
+local flat_lords = true -- 0.6.64: older Select Lord tests use the single list (lord-list-flat.flag)
+local repeating_timer = false -- 0.6.64: the game's register_repeating is offered
+local timer_registrations = 0
 local keys_poll
 local function build_nodes(layout)
     local result = {}
@@ -73,12 +76,21 @@ local function start(mode, layout, enable_automation, setup_status_failure, envi
         end,
         register_singleshot=function(name,interval)
             if name=='warhammer_accessibility_keys' then
+                assert(not repeating_timer,'No single shot when a repeating timer exists')
                 assert(interval==100)
                 keys_poll=function() keys_poll=nil; fire_timer(name) end
                 return
             end
             error('Automation timer requires a lease')
         end}
+    timer_registrations=0
+    if repeating_timer then
+        real_timer.register_repeating=function(name,interval)
+            assert(name=='warhammer_accessibility_keys' and interval==100)
+            timer_registrations=timer_registrations+1
+            keys_poll=function() fire_timer(name) end -- stays registered
+        end
+    end
     os.getenv=real_getenv
     automation_base=(real_getenv('LOCALAPPDATA') or '') .. '/JawsWarhammer2/'
     -- Most legacy scenarios exercise press-twice confirmation.
@@ -91,6 +103,7 @@ local function start(mode, layout, enable_automation, setup_status_failure, envi
         end
     end
     if probe_flag then files[automation_base .. 'string-find-probe.flag']={'1'} end
+    if flat_lords and context_mode=='frontend' then files[automation_base .. 'lord-list-flat.flag']={'1'} end
     if enable_automation then
         local keys_timer=real_timer
         files[automation_base .. 'automation-enabled.tsv']={type(enable_automation)=='string' and enable_automation or ('WH2LEASE1\t' .. string.rep('a',32) .. '\t1060\n')}
@@ -267,10 +280,19 @@ key('script_F4'); assert(#dispatches==1); assert(not last():find('Graphics opene
 -- Losing diagnostic output after arming must block dispatch.
 start(); choose_graphics(); key('script_F4'); file_failure=true; key('script_F4')
 no_dispatch('Diagnostic I/O failure')
--- Exhausting the bounded native log also blocks dispatch without growing it further.
+-- 0.6.64: at its 2 MiB cap the log starts again (never larger, never "unavailable").
 start(); choose_graphics()
 for i=1,30 do now=now+5; key('script_F4') end
-no_dispatch('Log cap'); assert(#contents('native-ui-graphics-preview.log') <= 2097152)
+no_dispatch('Timed-out presses'); assert(#contents('native-ui-graphics-preview.log') <= 2097152)
+local restarted=false
+for _=1,400 do
+    key('script_F2'); key('script_F3')
+    if contents('native-ui-graphics-preview.log'):find('log.restarted',1,true) then restarted=true; break end
+end
+assert(restarted,'The log restarts at its cap')
+assert(#contents('native-ui-graphics-preview.log') <= 2097152)
+choose_graphics(); key('script_F4'); now=now+1; key('script_F4')
+assert(#dispatches==1 and not says('Accessibility log unavailable'),'Activation works after the restart: '..last())
 -- The four-second boundary is inclusive; expiration during validation is rejected.
 start(); choose_graphics(); key('script_F4'); now=1004; key('script_F4'); assert(#dispatches==1)
 start(); choose_graphics(); key('script_F4')
@@ -622,7 +644,7 @@ for _, layout in ipairs({campaign_fixture,tooltip_fixture}) do
         key('script_F2')
         assert(says(i..' of 17') and last():find(name,1,true),last())
         if i==1 then assert(says('radio button, checked')) end
-        if i~=3 then
+        if i~=3 and i~=2 then -- 0.6.64: Mortal Empires can be chosen (tested below)
             assert(not last():find('read only',1,true)); key('script_F4'); key('script_F4'); no_dispatch('Selection information cannot dispatch')
         end
         assert(not last():find('button_campaign_entry',1,true) and not last():find('new_content_icon',1,true))
@@ -642,6 +664,33 @@ for _, layout in ipairs({campaign_fixture,tooltip_fixture}) do
     assert(not contents('native-ui-graphics-preview.log'):find('activation.observed_result',1,true))
     key('script_F4'); key('script_F4'); assert(#dispatches==1,'Unmapped lord/setup controls cannot activate')
 end
+-- 0.6.64: Mortal Empires (trial run 3 said "Not supported yet") is chosen by its radio button.
+local me_key='tree.child2.child0.child1.child1.child1'
+for _, layout in ipairs({campaign_fixture,tooltip_fixture}) do
+    start(nil,layout); key('script_F2'); key('script_F2'); assert(says('Mortal Empires, radio button, not checked, 2 of 17'),last())
+    key('script_F4'); no_dispatch('Mortal Empires first press'); assert(says('Mortal Empires. Press again'),last())
+    key('script_F4'); assert(#dispatches==1 and dispatches[1]==me_key,'Mortal Empires clicked'); assert(says('Mortal Empires selected.'),last())
+end
+single_press=true
+start(nil,campaign_fixture); key('script_F2'); key('script_F2'); key('script_F4')
+assert(#dispatches==1 and dispatches[1]==me_key and says('Mortal Empires selected.'),'One press chooses Mortal Empires')
+-- The checked campaign is not clicked again.
+start(nil,campaign_fixture); key('script_F2'); key('script_F4'); no_dispatch('Checked campaign'); assert(says('The Eye of the Vortex is already selected.'),last())
+-- A campaign that changes between selection and press is not clicked.
+start(nil,campaign_fixture); key('script_F2'); key('script_F2')
+nodes['tree.child2.child0.child1.child1.child1.child0'].data.GetStateText='Other'
+key('script_F4'); no_dispatch('Changed campaign label')
+single_press=false
+-- 0.6.64: back from Select Lord a hidden tooltip_campaign_select_lord layer
+-- replaces "Tooltip"; arrows must still move on (live: every key restarted at 1).
+local after_lord={}
+for prefix,row in pairs(tooltip_fixture) do local c={}; for k,v in pairs(row) do c[k]=v end; after_lord[prefix]=c end
+after_lord['tree.child5'].Id='tooltip_campaign_select_lord'
+start(nil,after_lord); key('script_F2'); key('script_F2'); assert(says('Mortal Empires, radio button','2 of 17'),last())
+key('script_F2'); assert(says('Continue, button','3 of 17'),last())
+-- A layer that becomes visible is still a screen change.
+nodes['tree.child5'].data.Visible=true; key('script_F2')
+assert(contents('native-ui-graphics-preview.log'):find('navigation.screen_changed',1,true),'Shown layer re-reads the screen')
 -- New Campaign now has a real observed panel identity for its result.
 start(); choose_campaign(); key('script_F4'); click_hook=function() install_scene(campaign_fixture) end
 key('script_F4'); key('script_F2'); assert(says('1 of 17'))
@@ -1211,7 +1260,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.63 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.64 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1317,7 +1366,7 @@ start(nil,lord_live,false)
 assert(browse_to('Start Campaign, button'))
 key('script_F4'); assert(spoken()=='Start the campaign as Tyrion, High Elves, Eataine? Press Enter again to start.',spoken()); no_dispatch('Start Campaign asks even with single press')
 key('script_F4'); assert(#dispatches==1 and dispatches[1]=='tree.child2.child1.child0','Second press starts the campaign')
-assert(spoken()=='Starting the campaign. The campaign map cannot be read yet.',spoken())
+assert(spoken()=='Starting the campaign. An intro movie plays first; press Escape to skip it.',spoken())
 assert(contents('native-ui-graphics-preview.log'):find('activation.dispatch\tstring\tStart Campaign',1,true))
 -- 0.6.62: Select Lord on another PC (no exact counts). Only a visible or
 -- unreadable extra root layer blocks; the chosen element is re-checked.
@@ -1483,5 +1532,138 @@ start(nil,other_pc); nodes[continue_campaign].data.CurrentState='active'
 key('script_F2'); key('script_F2'); nodes[continue_campaign].address=newproxy()
 key('script_F4'); assert(#dispatches==0 and says('The screen changed. Press F2 and try again.'),last())
 single_press=false
+-- 0.6.64 (trial run 3): Select Lord as a sequence of choices: race, lord,
+-- campaign setup (difficulty lists, details, Start Campaign); Backspace goes back.
+single_press, flat_lords = true, false
+local function ticks_until(n) for _=1,n do assert(keys_poll,'Key timer active'); keys_poll() end end
+local function back_key() send_keys('companion-steps',{'back'}) end
+local tyrion='tree.child2.child0.child1.child0.child1.child0.child0.child0'
+local teclis='tree.child2.child0.child1.child0.child1.child0.child0.child1'
+local dropdown='tree.child2.child0.child2.child2.child3.child2.child0'
+local function steps_start(layout)
+    start(nil,layout or lord_live,false)
+    send_keys('companion-steps',{}) -- the companion connects (no backlog)
+end
+steps_start()
+key('script_F2'); assert(spoken()=='Select Lord. Choose a race. High Elves, 3 lords, 1 of 6',spoken())
+for _,expected in ipairs({'Lizardmen, 2 lords, 2 of 6','Dark Elves, 3 lords, 3 of 6','Skaven, 3 lords, 4 of 6',
+    'Vampire Coast, 4 lords, 5 of 6','Tomb Kings, 4 lords, 6 of 6','High Elves, 3 lords, 1 of 6'}) do
+    key('script_F2'); assert(spoken()==expected,spoken())
+end
+back_key(); assert(spoken()=='This is the first step. Escape returns to Select Campaign.',spoken())
+key('script_F2'); key('script_F4'); assert(spoken()=='Lizardmen. Lord Mazdamundi, radio button, not checked, 1 of 3',spoken()); no_dispatch('Entering a race only reads')
+key('script_F3'); assert(spoken()=='Back, button, 3 of 3',spoken())
+key('script_F4'); assert(spoken()=='Choose a race. Lizardmen, 2 lords, 2 of 6',spoken())
+key('script_F3'); key('script_F4'); assert(spoken()=='High Elves. Tyrion, radio button, checked, 1 of 4',spoken())
+back_key(); assert(spoken()=='Choose a race. High Elves, 3 lords, 1 of 6',spoken())
+key('script_F4'); key('script_F2'); assert(spoken()=='Teclis, radio button, not checked, 2 of 4',spoken())
+-- Choosing a lord: one press, then the setup is read once the game shows it.
+click_hook=function()
+    nodes[tyrion].data.CurrentState='active'; nodes[teclis].data.CurrentState='selected'
+    nodes['tree.child2.child0.child2.child0.child4'].data.GetStateText='Teclis'
+end
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==teclis and spoken()=='Teclis chosen.',spoken()); click_hook=nil
+ticks_until(5)
+assert(spoken()=='Teclis is now selected. Campaign setup. Lord: Teclis, High Elves, Eataine, button, 1 of 6',spoken())
+for _,expected in ipairs({'Campaign difficulty, combo box, Normal, 2 of 6','Battle difficulty, combo box, Normal, 3 of 6'}) do
+    key('script_F2'); assert(spoken()==expected,spoken())
+end
+key('script_F2'); assert(says('Enable campaign introduction, check box') and says('4 of 6'),spoken())
+key('script_F2'); assert(spoken()=='Lord and faction details, button, 5 of 6',spoken())
+key('script_F2'); assert(spoken()=='Start Campaign, button, 6 of 6',spoken())
+-- Details: everything else on the screen, without the choices; Back returns.
+key('script_F3'); key('script_F4'); assert(says('Lord and faction details. ') and says(', 1 of '),spoken())
+local details=0
+for _=1,60 do
+    key('script_F2'); details=details+1
+    assert(not says('radio button') and not says('Start Campaign') and not says('combo box'),'Details hold no choices: '..spoken())
+    if says('Back, button') then break end
+end
+assert(details>10,'Details read the rest of the screen')
+key('script_F4'); assert(spoken()=='Campaign setup. Lord and faction details, button, 5 of 6',spoken())
+-- Backspace from the setup returns to the chosen lord's race.
+back_key(); assert(spoken()=='High Elves. Teclis, radio button, checked, 2 of 4',spoken())
+key('script_F4'); assert(spoken()=='Teclis is already selected. Campaign setup. Lord: Teclis, High Elves, Eataine, button, 1 of 6',spoken())
+assert(#dispatches==1,'An already chosen lord is not clicked again')
+-- Start Campaign from the setup still asks first.
+key('script_F3'); key('script_F4'); assert(spoken()=='Start the campaign as Teclis, High Elves, Eataine? Press Enter again to start.',spoken())
+key('script_F4'); assert(#dispatches==2 and dispatches[2]=='tree.child2.child1.child0',spoken())
+-- The summary goes back to the race choice.
+steps_start(); key('script_F2'); key('script_F4'); key('script_F4')
+assert(spoken()=='Tyrion is already selected. Campaign setup. Lord: Tyrion, High Elves, Eataine, button, 1 of 6',spoken())
+key('script_F4'); assert(spoken()=='Choose a race. High Elves, 3 lords, 1 of 6',spoken())
+-- Difficulty: Enter opens the game's list, the options are read, Enter chooses one.
+local function with_popup(layout)
+    local copy={}
+    for prefix,row in pairs(layout) do local c={}; for k,v in pairs(row) do c[k]=v end; copy[prefix]=c end
+    copy[dropdown .. '.child1']={Id='popup_menu',Visible=false,ChildCount=1,GetStateText='',GetTooltipText='',CurrentState='NewState',IsInteractive=true}
+    copy[dropdown .. '.child1.child0']={Id='popup_list',Visible=true,ChildCount=5,GetStateText='',GetTooltipText='',CurrentState='NewState',IsInteractive=true}
+    for i,label in ipairs({'Easy','Normal','Hard','Very Hard','Legendary'}) do
+        copy[dropdown .. '.child1.child0.child' .. (i-1)]={Id='option' .. (i-1),Visible=true,ChildCount=0,GetStateText=label,
+            GetTooltipText='',CurrentState='active',IsInteractive=true}
+    end
+    return copy
+end
+local popup_lord=with_popup(lord_live)
+steps_start(popup_lord); key('script_F2'); key('script_F4'); key('script_F4')
+key('script_F2'); assert(spoken()=='Campaign difficulty, combo box, Normal, 2 of 6',spoken())
+click_hook=function() nodes[dropdown .. '.child1'].data.Visible=true end
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==dropdown,'Enter opens the difficulty list'); click_hook=nil
+ticks_until(5); assert(spoken()=='Campaign difficulty, list. Normal, selected, 2 of 6',spoken())
+key('script_F2'); assert(spoken()=='Hard, 3 of 6',spoken())
+click_hook=function()
+    nodes[dropdown .. '.child1'].data.Visible=false
+    nodes[dropdown .. '.child0'].data.GetStateText='Hard'
+end
+key('script_F4'); assert(#dispatches==2 and dispatches[2]==dropdown .. '.child1.child0.child2','Enter chooses the option'); click_hook=nil
+ticks_until(5); assert(spoken()=='Campaign difficulty, combo box, Hard, 2 of 6',spoken())
+-- Backspace in the open list closes it in the game (the combo box again).
+click_hook=function() nodes[dropdown .. '.child1'].data.Visible=true end
+key('script_F4'); click_hook=nil; ticks_until(5); assert(says('Campaign difficulty, list.'),spoken())
+click_hook=function() nodes[dropdown .. '.child1'].data.Visible=false end
+back_key(); assert(#dispatches==4 and dispatches[4]==dropdown,'Backspace closes the list'); click_hook=nil
+ticks_until(5); assert(spoken()=='Campaign difficulty, combo box, Hard, 2 of 6',spoken())
+-- An option that changes before the press is not clicked.
+steps_start(popup_lord); key('script_F2'); key('script_F4'); key('script_F4'); key('script_F2')
+click_hook=function() nodes[dropdown .. '.child1'].data.Visible=true end
+key('script_F4'); click_hook=nil; ticks_until(5); key('script_F2')
+nodes[dropdown .. '.child1.child0.child2'].data.Id='other'
+key('script_F4'); assert(#dispatches==1 and says('The screen changed. Press F2 and try again.'),spoken())
+-- A key before the delayed read: the key reads the screen and the timer stays quiet.
+steps_start(); key('script_F2'); key('script_F4'); key('script_F2')
+click_hook=function()
+    nodes[tyrion].data.CurrentState='active'; nodes[teclis].data.CurrentState='selected'
+    nodes['tree.child2.child0.child2.child0.child4'].data.GetStateText='Teclis'
+end
+key('script_F4'); click_hook=nil; key('script_F2')
+assert(says('Teclis is now selected. Campaign setup. Lord: Teclis'),spoken())
+local heard=spoken(); ticks_until(8); assert(spoken()==heard,'No second reading from the timer')
+-- A race without a known lord is "Other lords".
+local unknown_race={}
+for prefix,row in pairs(lord_live) do local c={}; for k,v in pairs(row) do c[k]=v end; unknown_race[prefix]=c end
+for _,index in ipairs({15,16,17}) do unknown_race['tree.child2.child0.child1.child0.child1.child0.child0.child' .. index].Id='New lord ' .. index end
+steps_start(unknown_race); key('script_F2'); key('script_F2'); key('script_F2'); assert(spoken()=='Other lords, 3 lords, 3 of 6',spoken())
+-- lord-list-flat.flag keeps the single list.
+flat_lords=true; steps_start(); key('script_F2'); assert(spoken()=='Select Lord. Select Lord, heading, 1 of 49',spoken()); flat_lords=false
+-- Intro movies: announced when the script loads at game start, not on a later reload.
+local real_clock=os.clock
+os.clock=function() return 25 end; start(); os.clock=real_clock
+assert(contents('bridge.jsonl'):find('Intro movies playing. Press Escape to skip them.',1,true),'Movies announced at start')
+os.clock=function() return 600 end; start(); os.clock=real_clock
+assert(not contents('bridge.jsonl'):find('Intro movies playing',1,true),'No movie notice after a campaign')
+-- One repeating key timer, registered once and never from its callback
+-- (0.6.64: re-registering inside the callback silenced the reader live).
+repeating_timer=true
+steps_start(popup_lord)
+assert(timer_registrations==1,'Registered once at start')
+key('script_F2'); key('script_F4'); key('script_F4'); key('script_F2')
+click_hook=function() nodes[dropdown .. '.child1'].data.Visible=true end
+key('script_F4'); click_hook=nil
+ticks_until(6); assert(spoken()=='Campaign difficulty, list. Normal, selected, 2 of 6',spoken())
+send_keys('companion-steps',{'next'}); assert(spoken()=='Hard, 3 of 6',spoken())
+assert(timer_registrations==1,'Never registered again from the callback')
+assert(contents('native-ui-graphics-preview.log'):find('keys.enabled	string	companion key channel, repeating timer',1,true))
+repeating_timer=false
+single_press, flat_lords = false, true
 io=real_io; os.time=real_time; os.date=real_date
 print('PASS: '..scenarios..' frontend scenarios; 86-node/22-control capture, cached wraparound, four allowlisted frontend targets and observed-result checks, confirmations, stale identities, native failures, template/panel changes, lifecycle, clocks and blocked game contexts')

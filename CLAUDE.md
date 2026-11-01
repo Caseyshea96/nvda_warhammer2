@@ -24,7 +24,8 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 ## Current state — read before working
 
 - `docs/AUTOMATION_SESSION.md` — full session history and current stop point.
-- `docs/FIRST_TRIAL_0_6_60.md` — latest: first outside trial fixes (main menu on other PCs, Continue Campaign, launch without TW Mod Manager, HUD reading on by default; accepted 0.6.60) 0.6.61: "ready" waits for the menu after the intro movies; 0.6.62: Select Lord without exact layout checks; 0.6.63: the installer upgrades in place (trial 2 ran the old build) and "ready" says the version.
+- `docs/TRIAL_3_0_6_64.md` — latest: Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
+- `docs/FIRST_TRIAL_0_6_60.md` — first outside trial fixes (main menu on other PCs, Continue Campaign, launch without TW Mod Manager, HUD reading on by default; accepted 0.6.60) 0.6.61: "ready" waits for the menu after the intro movies; 0.6.62: Select Lord without exact layout checks; 0.6.63: the installer upgrades in place (trial 2 ran the old build) and "ready" says the version.
 - `docs/SETTLEMENTS_0_6_43.md` — provinces, settlement panel, building and recruiting by keyboard, intro check box, player guide, armies read, silent-reader fix, document reading order and province/unit figures (accepted 0.6.59).
 - `docs/CAMPAIGN_BUTTONS_0_6_39.md` — HUD buttons, End Turn, first turn by keyboard (0.6.38–0.6.42).
 - `docs/CAMPAIGN_DISCOVERY_0_6_31.md` — owner-requested stop; candidate offline checks passed, live gates pending.
@@ -46,7 +47,7 @@ Previous 0.6.30 captured early with read/type issues; 0.6.15–0.6.17 are failed
 candidates. Preserve existing rollback archives and do not auto-start another
 campaign under the earlier consumed one-campaign approval.
 
-**Never register a `real_timer` from inside a timer callback** (it froze the game's timers); use one repeating timer.
+**Never register a `real_timer` from inside a timer callback** (it froze the game's timers: campaign 0.6.58, menus 0.6.64); use one repeating timer (`register_repeating`).
 
 **Never call `string.find` in the runtime.** In WH2 the plain form returns nil
 for a match and then makes `string.sub` return numbers (confirmed live). Use
@@ -181,7 +182,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.63; before it 0.6.62) as the rollback.
+- Preserve the last known working build (0.6.64; before it 0.6.63) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.

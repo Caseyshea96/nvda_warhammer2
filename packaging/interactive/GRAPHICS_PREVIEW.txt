@@ -29,10 +29,10 @@ EACH TIME YOU PLAY
    below; keep it running. It tests speech, then starts the game itself
    with only the accessibility mod: no TW Mod Manager window. You hear
    "Starting Warhammer with the accessibility mod." Other mods are not
-   loaded in this mode. The intro movies play first, about two minutes
-   (Escape skips them); the menu is not read until they end.
+   loaded in this mode. Then "Intro movies playing. Press Escape to skip
+   them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.63 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.64 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure jaws_access is ticked, then press Play.
@@ -44,19 +44,33 @@ KEYS IN MENUS
   Home / End          first / last item
   Enter or Space      activate (one press)
   A letter            next item starting with that letter
-  Escape              the game's own Back key
+  Backspace           back one step (Select Lord)
+  Escape              the game's own Back key (previous screen)
   F2 / F3 / F4        also next / previous / activate
 
 STARTING A CAMPAIGN
   Continue Campaign (main menu) loads your latest save. Load Campaign is
   not supported yet.
-  Main menu: Campaigns / New Campaign  ->  Select Campaign: Continue  ->
-  Select Lord: choose a lord with Enter ("Teclis is now selected.").
-  "Enable campaign introduction, check box": we suggest unchecking it with
-  Enter for now. The tutorial locks End Turn and several buttons until its
-  objectives (which need army movement) are done.
-  "Start Campaign" asks first: press Enter twice.
-  The map then loads and an intro flyover plays (about a minute).
+  Main menu: New Campaign  ->  Select Campaign: choose The Eye of the
+  Vortex or Mortal Empires with Enter, then Continue.
+  Select Lord goes one decision at a time (Backspace goes back a step):
+  1. Choose a race: "High Elves, 3 lords, 1 of 6". Enter opens it.
+  2. Choose a lord: "Teclis, radio button, not checked". Enter chooses him.
+  3. Campaign setup:
+       Lord: Teclis, High Elves, Order of Loremasters (Enter: choose again)
+       Campaign difficulty, combo box, Normal (Enter opens the list:
+         arrows to an option, Enter chooses it; Backspace closes it)
+       Battle difficulty, combo box, Normal (the same)
+       Enable campaign introduction, check box (only for some lords): we
+         suggest unchecking it with Enter for now. The tutorial locks End
+         Turn and several buttons until its objectives (which need army
+         movement) are done.
+       Lord and faction details (Enter: effects, units, race attributes)
+       Start Campaign: asks first, press Enter twice.
+  Prefer the old single list? Put an empty file lord-list-flat.flag in
+  %LOCALAPPDATA%\JawsWarhammer2 .
+  Then an intro movie plays (Escape skips it), the map loads and a flyover
+  plays (about a minute).
 
 ------------------------------------------------------------------------
 ON THE CAMPAIGN MAP
