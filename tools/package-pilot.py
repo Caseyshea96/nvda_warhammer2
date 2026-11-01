@@ -12,7 +12,7 @@ graphics_preview = "--graphics-preview" in sys.argv
 scanner_compare = "--scanner-compare" in sys.argv
 if graphics_preview == scanner_compare:
     raise SystemExit('Choose --graphics-preview or --scanner-compare')
-version = "0.6.67-nvda-automation-preview" if graphics_preview else "0.5.3-nvda-scanner-compare"
+version = "0.6.68-nvda-automation-preview" if graphics_preview else "0.5.3-nvda-scanner-compare"
 pack_name = "warhammer_access_graphics_preview.pack" if graphics_preview else "warhammer_access_scanner_compare.pack"
 
 root = Path(__file__).resolve().parents[1]
@@ -53,7 +53,7 @@ manifest = {
 }
 files['manifest.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
 expected = {'warhammer_access.pack','Companion.ps1','Bridge.cs','NvdaController.cs','MenuKeys.cs','Protocol.ps1',
-            'Install.ps1','Install.cmd','Uninstall.ps1','Uninstall.cmd','Start Pilot.cmd','README.txt','manifest.json',
+            'Install.ps1','Install.cmd','Uninstall.ps1','Uninstall.cmd','Update.ps1','Update.cmd','Start Pilot.cmd','README.txt','manifest.json',
             'nvdaControllerClient.dll','LICENSE-NVDA-CONTROLLER.txt','warhammer2-quiet-mode-0.1.0.nvda-addon'}
 if graphics_preview:
     expected.add('Automation.ps1')

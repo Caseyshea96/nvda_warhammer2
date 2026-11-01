@@ -7,12 +7,16 @@
 param([Parameter(Mandatory=$true)][datetime]$Since, [string]$Wait, [int]$Seconds = 60)
 $trace = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\speech-trace.jsonl'
 $since = $Since.ToUniversalTime()
+# The companion writes time_utc in round-trip form (2026-11-01T18:24:44.4261754Z),
+# so old lines are skipped by comparing text; only newer lines are parsed.
+$sinceText = $since.ToString('yyyy-MM-ddTHH:mm:ss.fffffff') + 'Z'
 function Get-Lines {
     if (-not (Test-Path -LiteralPath $trace)) { return }
     foreach ($line in [IO.File]::ReadAllLines($trace)) {
+        $m = [regex]::Match($line, '"time_utc":"([^"]+)"')
+        if (-not $m.Success -or [string]::CompareOrdinal($m.Groups[1].Value, $sinceText) -le 0) { continue }
         try { $o = $line | ConvertFrom-Json } catch { continue }
-        $at = [datetime]::Parse($o.time_utc).ToUniversalTime()
-        if ($at -gt $since) { [pscustomobject]@{ At = $at; Text = [string]$o.details.text } }
+        [pscustomobject]@{ At = [datetime]::Parse($o.time_utc).ToUniversalTime(); Text = [string]$o.details.text }
     }
 }
 if (-not $Wait) { Get-Lines | ForEach-Object { $_.At.ToString('HH:mm:ss') + '  ' + $_.Text }; exit 0 }

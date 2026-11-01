@@ -16,7 +16,8 @@ try {
             Remove-Item -LiteralPath $target
         }
         $installedNames = @('Companion.ps1','Bridge.cs','NvdaController.cs','MenuKeys.cs','Protocol.ps1','Uninstall.ps1','README.txt',
-            'Start Pilot.cmd','Uninstall.cmd','nvdaControllerClient.dll','LICENSE-NVDA-CONTROLLER.txt','warhammer2-quiet-mode-0.1.0.nvda-addon')
+            'Start Pilot.cmd','Uninstall.cmd','nvdaControllerClient.dll','LICENSE-NVDA-CONTROLLER.txt','warhammer2-quiet-mode-0.1.0.nvda-addon',
+            'Update.ps1','Update.cmd')
         if ($manifest.automation_protocol -eq 1) { $installedNames += 'Automation.ps1' }
         foreach ($name in $installedNames) {
             $path = Join-Path $app $name
@@ -27,10 +28,12 @@ try {
         foreach ($name in @('config.json','manifest.json')) { Remove-Item -LiteralPath (Join-Path $app $name) -ErrorAction SilentlyContinue }
         if (@(Get-ChildItem -LiteralPath $app -Force).Count -eq 0) { Remove-Item -LiteralPath $app }
         if ($env:OS -eq 'Windows_NT') {
-            $shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Warhammer NVDA Pilot.lnk'
-            if (Test-Path -LiteralPath $shortcutPath) {
-                $shell = New-Object -ComObject WScript.Shell
-                if ($shell.CreateShortcut($shortcutPath).TargetPath -eq (Join-Path $app 'Start Pilot.cmd')) { Remove-Item -LiteralPath $shortcutPath }
+            foreach ($pair in @(@('Warhammer NVDA Pilot.lnk','Start Pilot.cmd'), @('Warhammer NVDA Update.lnk','Update.cmd'))) {
+                $shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) $pair[0]
+                if (Test-Path -LiteralPath $shortcutPath) {
+                    $shell = New-Object -ComObject WScript.Shell
+                    if ($shell.CreateShortcut($shortcutPath).TargetPath -eq (Join-Path $app $pair[1])) { Remove-Item -LiteralPath $shortcutPath }
+                }
             }
         }
         Remove-Item -LiteralPath (Join-Path $base 'receipt.json')

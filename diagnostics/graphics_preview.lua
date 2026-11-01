@@ -363,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.67-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.68-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -2464,7 +2464,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.67-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.68-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2660,7 +2660,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.67 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.68 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end

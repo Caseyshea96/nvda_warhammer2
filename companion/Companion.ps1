@@ -194,7 +194,11 @@ try {
         $path = Join-Path $base 'reader-state.tsv'
         try {
             $info = New-Object IO.FileInfo $path
-            if (-not $info.Exists -or ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds -gt 3) { return $null }
+            # 15 s, not 3: the game sometimes stalls the mod's timers for a few
+            # seconds (camera jumps); releasing the keys then sent Enter to the
+            # game (live 0.6.68). Keys pressed meanwhile wait in keys.tsv. Map
+            # controls (Shift+F2) and leaving the game still release them at once.
+            if (-not $info.Exists -or ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds -gt 15) { return $null }
             $fields = ([IO.File]::ReadAllText($path)).TrimEnd("`r", "`n").Split("`t")
             if ($fields.Count -ne 5 -or $fields[0] -ne 'WH2READER1' -or $fields[3] -ne '1') { return $null }
             return [pscustomobject]@{ session = $fields[1]; generation = $fields[2]; screen = $fields[4] }

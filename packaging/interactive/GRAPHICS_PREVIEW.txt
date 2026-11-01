@@ -2,22 +2,31 @@ WARHAMMER II NVDA ACCESSIBILITY PROTOTYPE
 
 An early prototype that lets Total War: WARHAMMER II be played with NVDA
 and the keyboard: menus, starting a campaign, reading the campaign screen,
-managing settlements (build, recruit) and ending turns. Moving armies and
-battles are NOT supported yet. Your feedback on how things should be
-controlled is the main goal of this test.
+managing settlements (build, recruit), moving armies and ending turns.
+Attacks and battles are NOT supported yet. Your feedback on how things should
+be controlled is the main goal of this test.
 
 Items are spoken the way NVDA reads any program: name, role, value, states,
 then position, for example "Recruit Lord, button, 53 of 106".
 
 ------------------------------------------------------------------------
-INSTALL OR UPDATE
-1. Close the game and the helper. Extract the whole ZIP to a folder.
+UPDATE TO A NEW VERSION (once 0.6.68 or later is installed)
+1. Close the game. Save the new ZIP in Downloads or on the Desktop (do not
+   extract it).
+2. Run the desktop shortcut "Warhammer NVDA Update". It finds the newest
+   ZIP, closes the helper if it is running, installs it and says "Upgraded
+   from version ... to ...". Press a key to close the window, then start
+   the game with "Warhammer NVDA Pilot" as usual.
+
+FIRST INSTALL (or updating from 0.6.67 or earlier)
+1. Close the game. Extract the whole ZIP to a folder.
 2. Run Install.cmd. It finds the Steam game folder (or asks for the folder
    containing Warhammer2.exe), copies warhammer_access.pack into the game's data
-   folder and the helper into %LOCALAPPDATA%\WarhammerAccess\App. It makes a
-   desktop shortcut "Warhammer NVDA Pilot". For a new version, run the new
-   ZIP's Install.cmd: it replaces the earlier version and says "Upgraded
-   from version ... to ...". No need to uninstall first.
+   folder and the helper into %LOCALAPPDATA%\WarhammerAccess\App, and closes
+   the helper if it is running. It makes two desktop shortcuts: "Warhammer
+   NVDA Pilot" (play) and "Warhammer NVDA Update" (next updates). Over an
+   earlier version it says "Upgraded from version ... to ..."; no need to
+   uninstall first.
 3. Install warhammer2-quiet-mode-0.1.0.nvda-addon (in the App folder) into
    NVDA and restart NVDA. It keeps NVDA quiet while the game has focus, so
    only the mod's speech is heard.
@@ -32,7 +41,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.67 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.68 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.

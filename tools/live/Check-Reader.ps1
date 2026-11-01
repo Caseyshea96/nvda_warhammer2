@@ -1,6 +1,7 @@
 # Is the mod's reader alive? Screenshots cannot tell: a still campaign map
 # looks the same as a frozen one. The reader writes reader-state.tsv about
-# once a second; the companion drops its keys when it is over 3 s old.
+# once a second; over 3 s old means stalled, and the companion drops its keys
+# when it is over 15 s old.
 # Prints READER=alive|silent, its age, the screen it reports, whether the
 # game window responds, and the game's CPU use over 3 s (one full core with
 # a silent reader = the old frozen-timer state).

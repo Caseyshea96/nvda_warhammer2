@@ -17,7 +17,8 @@ try {
     $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
     # Only fixed local filenames from our package can be installed.
     $expectedNames = @('warhammer_access.pack','Companion.ps1','Bridge.cs','NvdaController.cs','MenuKeys.cs','Protocol.ps1','Uninstall.ps1',
-        'Start Pilot.cmd','Uninstall.cmd','README.txt','nvdaControllerClient.dll','LICENSE-NVDA-CONTROLLER.txt','warhammer2-quiet-mode-0.1.0.nvda-addon')
+        'Start Pilot.cmd','Uninstall.cmd','README.txt','nvdaControllerClient.dll','LICENSE-NVDA-CONTROLLER.txt','warhammer2-quiet-mode-0.1.0.nvda-addon',
+        'Update.ps1','Update.cmd')
     if ($manifest.automation_protocol -eq 1) { $expectedNames += 'Automation.ps1' }
     foreach ($name in $expectedNames) {
         $expected = $manifest.files.$name
@@ -81,6 +82,20 @@ try {
         if (-not $oldOurs) {
             throw 'An older jaws_access.pack that this installer cannot confirm is in the game data folder. Back it up and remove it, then run Install.cmd again.'
         }
+    }
+    # Close the accessibility helper if it is running (it is ours and holds
+    # the lock); updating no longer needs the player to close it first.
+    $helpers = @()
+    try {
+        $helpers = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop | Where-Object {
+            $_.CommandLine -and ($_.CommandLine.IndexOf((Join-Path $base 'App\Companion.ps1'), [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                $_.CommandLine.IndexOf((Join-Path $oldBase 'App\Companion.ps1'), [StringComparison]::OrdinalIgnoreCase) -ge 0) })
+    } catch { }
+    if ($helpers.Count) {
+        Write-Host 'Closing the accessibility helper.'
+        foreach ($helper in $helpers) { Stop-Process -Id $helper.ProcessId -Force -ErrorAction SilentlyContinue }
+        $until = (Get-Date).AddSeconds(5)
+        while ((Get-Date) -lt $until -and @($helpers | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }).Count) { Start-Sleep -Milliseconds 200 }
     }
     if ($oldReceipt) {
         # The old companion must not be running (it holds this lock).
@@ -173,7 +188,11 @@ try {
                 $shortcut.TargetPath = Join-Path $app 'Start Pilot.cmd'
                 $shortcut.WorkingDirectory = $app
                 $shortcut.Save()
-            } catch { Write-Host 'Desktop shortcut unavailable; use Start Pilot.cmd in the installed App folder.' }
+                $update = $shell.CreateShortcut((Join-Path $desktop 'Warhammer NVDA Update.lnk'))
+                $update.TargetPath = Join-Path $app 'Update.cmd'
+                $update.WorkingDirectory = $app
+                $update.Save()
+            } catch { Write-Host 'Desktop shortcuts unavailable; use Start Pilot.cmd and Update.cmd in the installed App folder.' }
         }
         $shownVersion = ([string]$manifest.version).Split('-')[0]
         $previousVersion = $(if ($movedFrom) { $movedFrom } elseif ($previous -and $previous.version) { ([string]$previous.version).Split('-')[0] } else { '' })
@@ -182,6 +201,7 @@ try {
         Write-Host "Installed: $app"
         Write-Host 'Start NVDA and Steam, then run the desktop shortcut (or Start Pilot.cmd). It tests NVDA and starts the game with the accessibility mod; no Mod Manager is needed.'
         Write-Host 'Before testing, install warhammer2-quiet-mode-0.1.0.nvda-addon from the App folder and restart NVDA.'
+        Write-Host 'To update later: save the new ZIP in Downloads or on the Desktop and run the Warhammer NVDA Update shortcut.'
         Write-Host 'If Steam is not running, the game opens through Steam: tick warhammer_access in the Mod Manager and press Play.'
         Write-Host 'This is an experimental prototype; please report what works and what does not.'
     } finally { $lock.Dispose(); if ($oldLock) { $oldLock.Dispose() } }

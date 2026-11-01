@@ -744,9 +744,13 @@ do
     make('tree.child0.child3.child0.child0.child0.child0.child1.child0.child0','dy_character_name',0,'Cavill')
     make('tree.child0.child3.child0.child1','regions_dropdown',1)
     local regions_panel=make('tree.child0.child3.child0.child1.child0','panel',1,'',false)
-    make('tree.child0.child3.child0.child1.child0.child0','list_box',2)
-    make('tree.child0.child3.child0.child1.child0.child0.child0','row_entry_prov_eataine',0)
-    make('tree.child0.child3.child0.child1.child0.child0.child1','row_entry_prov_tiranoc',0)
+    -- As in the game: the outer list holds sections; rows are inside them.
+    make('tree.child0.child3.child0.child1.child0.child0','list_box',1)
+    make('tree.child0.child3.child0.child1.child0.child0.child0','section',2)
+    make('tree.child0.child3.child0.child1.child0.child0.child0.child0','headers',0)
+    make('tree.child0.child3.child0.child1.child0.child0.child0.child1','list_box',2)
+    make('tree.child0.child3.child0.child1.child0.child0.child0.child1.child0','row_entry_prov_eataine',0)
+    make('tree.child0.child3.child0.child1.child0.child0.child0.child1.child1','row_entry_prov_tiranoc',0)
     make('tree.child0.child4','bar_small_top',1)
     make('tree.child0.child4.child0','tabs',2)
     local tab_units=make('tree.child0.child4.child0.child0','tab_units',0)
@@ -828,7 +832,7 @@ do
     assert(heard('Tyrion arrived at Tor Elasor.'),contents('bridge.jsonl'))
     -- From the lord to the settlement he stands in.
     before=dispatches; send('lords')
-    assert(dispatches==before+2 and clicked=='tree.child0.child3.child0.child1.child0.child0.child1','Opens Provinces, then clicks Tiranoc: ' .. tostring(clicked))
+    assert(dispatches==before+2 and clicked=='tree.child0.child3.child0.child1.child0.child0.child0.child1.child1','Opens Provinces, then clicks Tiranoc: ' .. tostring(clicked))
     assert(heard('Tor Elasor, Tiranoc.'),contents('bridge.jsonl'))
     -- From a settlement back to the nearest lord (list already open: one click).
     fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
@@ -857,11 +861,32 @@ do
     tick(4); assert(#orders==3 and orders[3][1]=='character_cqi:5' and orders[3][2]==102 and orders[3][3]==100,'Retry next to the settlement')
     assert(contents('native-ui-campaign-discovery.jsonl'):find('"target":"102,100"',1,true))
     tick(7); assert(heard('Tyrion did not move.'),contents('bridge.jsonl'))
-    -- A failing game call is said, and the reader keeps working.
+    -- A failing game read is said plainly.
     cm.get_local_faction=function() error('Synthetic failure') end
-    send('lords'); assert(said()=='Could not do that.' or said()=='Not available here.',said())
+    send('lords'); assert(said()=='Not available here.',said())
     cm.get_local_faction=function() return hef end
+    -- An error inside a command is logged and said, and the reader keeps working.
+    local sort=table.sort
+    table.sort=function(t,f) if t[1] and t[1].cqi then error('Synthetic command failure') end; return sort(t,f) end
+    send('lords'); table.sort=sort
+    assert(said()=='Could not do that.' and contents('native-ui-campaign-discovery.jsonl'):find('"kind":"command-error"',1,true),said())
     local list_before=contents('bridge.jsonl'); send('next'); assert(contents('bridge.jsonl')~=list_before,'Reader still answers keys')
+    -- Two rows with the lord's name: refuse rather than pick the wrong one.
+    units_panel.visible=true; regions_panel.visible=false
+    nodes['tree.child0.child3.child0.child0.child0.child0.child1.child0.child0'].label='Tyrion'
+    local selected_before=dispatches
+    fire('CharacterSelected',{character=function() return cavill end})
+    send('nextlord')
+    assert(dispatches==selected_before and said()=='More than one lord is called Tyrion. Choose him in the Lords & Heroes list.',said())
+    nodes['tree.child0.child3.child0.child0.child0.child0.child1.child0.child0'].label='Cavill'
+    -- After a settlement is selected (e.g. the lord joined its garrison), F7
+    -- still lists moves for the last lord selected; F4 works in the list too.
+    tyrion.ap=100; tyrion.x,tyrion.y=120,100
+    fire('CharacterSelected',{character=function() return tyrion end})
+    fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
+    send('moves'); assert(heard('Move Tyrion, 100 percent movement, 2 of 4 places this turn.'),contents('bridge.jsonl'))
+    fire('ShortcutTriggered',{string='script_F4'}); assert(said()=='Move Tyrion to Tor Elasor? Press Enter again to confirm.',said())
+    send('back')
 end
 -- With the game's timer: one repeating game callback, registered at the first
 -- tick (never from inside a timer callback), runs the queued model jobs; the
@@ -929,6 +954,12 @@ do
     send('moves'); tick(4)
     assert(said()=='The game is busy. Try again.' and contents('native-ui-campaign-discovery.jsonl'):find('"kind":"model-stalled"',1,true),said())
     pump(); assert(said()=='The game is busy. Try again.','Dropped jobs do not run later')
+    -- A full queue (16 jobs) says so instead of dropping the key silently.
+    send('moves','moves','moves','moves','moves','moves','moves','moves')
+    send('moves','moves','moves','moves','moves','moves','moves','moves')
+    local busy=select(2,contents('bridge.jsonl'):gsub('The game is busy%. Try again%.',''))
+    send('moves')
+    assert(select(2,contents('bridge.jsonl'):gsub('The game is busy%. Try again%.',''))==busy+1,'Seventeenth job: busy')
 end
 io=saved_io;os.date=saved_date
 print('PASS: ' .. scenarios .. ' campaign diagnostic scenarios; HUD readiness, scoped discovery, typed failures, capture protocol, replay/generation/lease guards, limits, cancellation and zero clicks')

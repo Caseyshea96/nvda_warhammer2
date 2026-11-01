@@ -66,8 +66,8 @@ turn. Lothern, button, yours, this turn, 1 of 16"; Enter, Enter → "Moving to
 Lothern." → "Tyrion arrived at Lothern." Run `-12` (same code plus a fallback
 that never fired, since removed): F7 → C → Caledor's Repose (ruins) → "Moving
 toward Caledor's Repose." → retry outside → "Tyrion stopped on the way to
-Caledor's Repose, no movement left." F6 lord → settlement was verified
-earlier (`-moves-4`/`-9`, older order code, same selection code).
+Caledor's Repose, no movement left." (Correction: F6 lord → settlement was
+**not** verified in 0.6.67, and it was broken: see 0.6.68.)
 No turn was ended, nothing was saved; the save files are unchanged.
 
 ## The freeze / silent reader (not caused by 0.6.67; open)
@@ -93,3 +93,54 @@ jobs wait 3 s. Next: find what stops the game's script timers (both
 - `Send-Keys.ps1` knows F6, ShiftF6, F7.
 - Harness: 55 campaign scenarios (+2: F6/F7/moves with direct model access;
   the game-timer job queue, one repeating timer, stall message).
+
+## 0.6.68 — review fixes and one-step updates (November 1, 2026)
+
+Code review of 0.6.67 (10 findings), all fixed:
+- **F6 lord → settlement was broken live** ("Could not find Lothern in the
+  Provinces list."): province rows sit inside sections of the list
+  (`list_box` → section → `list_box` → `row_entry_<province>`), not directly
+  in it. The row is now found by its ID anywhere in the panel; the harness
+  fixture has the real nesting. Live: "Lothern, Straits of Lothern.", the
+  settlement panel read, F6 again → "Tyrion, 7 units, 100 percent movement."
+  (`work/live-0.6.68-moves-2`).
+- Lord rows: full name first; a first name only when exactly one row has it;
+  otherwise "More than one lord is called X. Choose him in the Lords &
+  Heroes list." (no wrong selection).
+- F7 uses the selected lord, else the last lord selected (the game may select
+  the settlement after he joins its garrison).
+- F4 in the move list goes through the same guard as Enter (an error no
+  longer stops the reader).
+- A stopped reader also quiets the game-timer job pump.
+- A full job queue (16) says "The game is busy. Try again."
+- F7 reads only positions for all regions; names/owners for the nearest 15.
+- `Read-Speech` skips older lines by comparing timestamps as text.
+- Harness: a real error inside a command ("Could not do that.", logged).
+- Diagnostic probes (`game-api`, `lord-state`) only with the developer flag.
+
+Keys during a stall: live, the reader's timer stalled after a camera change,
+the companion (3 s heartbeat limit) released its keys and two Enters went to
+the game (harmless that time: no turn ended, saves unchanged). The companion
+now keeps its keys for stalls up to **15 s**; keys pressed meanwhile wait in
+keys.tsv and run when the reader resumes. Map controls (Shift+F2) and
+leaving the game still release them at once. In the last run the reader
+stopped for good ~20 s after the army arrived (the open freeze problem): F6
+and F7 were held and never ran.
+
+**One-step update.** The installer now closes the running helper itself
+(instead of refusing) and makes a second desktop shortcut, "Warhammer NVDA
+Update" (`Update.cmd` → `Update.ps1`). It finds the newest
+`warhammer2-windows-<version>-nvda-automation-preview.zip` (also "… (1).zip")
+in Downloads (the real Downloads folder) or on the Desktop, says "Updating
+from version A to B.", unpacks it to a temporary folder, runs its installer
+(every file checked against its manifest) and deletes the temporary folder.
+No newer ZIP: "Version A is installed; the newest download is B. Nothing to
+update." No ZIP: "No update found. Save the new ZIP …". `Update.cmd` is one
+line on purpose (the update replaces it while cmd runs it). Updating from
+0.6.67 or earlier still uses the ZIP's Install.cmd once. Live: 0.6.67 →
+0.6.68 "Upgraded from version 0.6.67 to 0.6.68.", both shortcuts made;
+Update with the helper running → "Closing the accessibility helper." and the
+helper gone; no-argument run found an old 0.6.63 ZIP on the Desktop and said
+nothing to update (`work/live-0.6.68-update`). Installer checks cover the
+update (no ZIP, already current, older install updated) and closing a real
+running helper.

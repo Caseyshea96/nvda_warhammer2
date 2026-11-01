@@ -175,6 +175,40 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         automation.write_bytes(b'corrupt automation helper')
         install(success=False)
         automation.write_bytes(original)
+    # One-step update: the installed Update.ps1 finds the newest ZIP in a
+    # folder, unpacks it and runs its installer (no extracting by hand).
+    downloads = folder / 'Downloads'
+    downloads.mkdir()
+    def update(*extra, success=True):
+        return run(app / 'Update.ps1', '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut', *extra, success=success)
+    missing = update(success=False)
+    assert 'No update found' in missing.stdout, missing.stdout
+    shutil.copy(archive_path, downloads / archive_path.name)
+    (downloads / 'warhammer2-windows-0.1.0-nvda-automation-preview.zip').write_bytes(b'older, never chosen')
+    (downloads / 'warhammer2-windows-notes.zip').write_bytes(b'not a version')
+    current = update()
+    assert 'Nothing to update' in current.stdout, current.stdout
+    fake_older()
+    updated = update()
+    version = manifest['version'].split('-')[0]
+    assert 'Updating from version 0.6.59 to ' + version in updated.stdout, updated.stdout
+    assert 'Upgraded from version 0.6.59 to ' + version in updated.stdout, updated.stdout
+    assert target.read_bytes() == new_pack and companion.read_bytes() == new_companion
+    assert (app / 'Update.ps1').exists() and (app / 'Update.cmd').exists()
+    # Installing while the helper runs: the installer closes it (Windows only).
+    if os.name == 'nt':
+        helper = subprocess.Popen(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(app / 'Companion.ps1'), '-Console'],
+                                  env=env, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            import time
+            time.sleep(4)
+            assert helper.poll() is None, 'Helper did not start'
+            closed = install()
+            assert 'Closing the accessibility helper.' in closed.stdout, closed.stdout
+            helper.wait(timeout=10)
+        finally:
+            if helper.poll() is None:
+                helper.kill()
     # Uninstaller must not delete a changed pack.
     original_pack = target.read_bytes()
     target.write_bytes(b'changed')
@@ -197,4 +231,4 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         run(app / 'Uninstall.ps1')
         assert automation.read_bytes() == modified, 'Changed automation helper must be preserved'
         assert (game / 'save.txt').read_text() == 'preserve save'
-print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')
+print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, one-step update from a downloaded ZIP, closing a running helper, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')

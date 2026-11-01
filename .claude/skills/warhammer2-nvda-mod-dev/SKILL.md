@@ -69,7 +69,7 @@ tools/live/Stop-Session.ps1 -Evidence work/live-<ver>-<topic>   # ALWAYS, also a
 After camera or selection changes (campaign load, a list-row click, an army entering a settlement) either the game stops responding, or it keeps running while the mod's timers stop. 0.6.66 does it too.
 - Detect with `Check-Reader.ps1`: `READER=silent` (heartbeat over 3 s old). A still screenshot proves nothing.
 - `RESPONDING=False` for over 2 minutes, or silent for over a minute: copy the logs into the evidence folder, `Stop-Session`, relaunch. Do not retry the same step blindly. Before blaming your change, compare once with the previous build (install its ZIP without `-Upgrade`).
-- While silent, the companion releases its keys, so keys go to the game.
+- During a stall the companion keeps its keys for 15 s (they wait in keys.tsv); after that it releases them and keys go to the game.
 
 ## 6. Document and ship
 1. `docs/<AREA>_<ver>.md`: keys, what is read, guards, live evidence (folders), what is not verified, known problems.
