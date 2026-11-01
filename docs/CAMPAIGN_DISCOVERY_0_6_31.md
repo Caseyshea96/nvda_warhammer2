@@ -71,7 +71,7 @@ reaches ready or limited; inspect the log on error/timeout. The mode-verify
 native cursor test is explicitly not a physical-key test. Stop-Session preserves
 status/evidence and removes only its matching owned capture request and flag.
 
-Source, fixtures and helper scripts remain in C:/Dev/jaws_warhammer2. The tested
+Source, fixtures and helper scripts remain in the repository. The tested
 ZIP/checksum are in artifacts/ and outputs/. Verification snapshot is
 work/checkpoint-0.6.31/final-checkpoint.json. Candidate changes are uncommitted;
 previous work and rollback archives are preserved. No new continuation schedule

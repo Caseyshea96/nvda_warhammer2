@@ -11,11 +11,11 @@ The initial F2 captures once per launch, then navigation uses captured entries.
 
 Close game and companion. Uninstall the current preview, then run Install.cmd
 from this package. Keep NVDA Quiet Mode enabled. Launch through the normal
-Mod Manager with only jaws_access enabled.
+Mod Manager with only warhammer_access enabled.
 
 At the main menu, TAP F2 ONCE, then wait for speech to finish. If controls are
 announced, F2/F3 can browse. Send bridge.jsonl and native-ui-scanner-compare.log
-from %LOCALAPPDATA%\JawsWarhammer2. This build does not enable speech tracing;
+from %LOCALAPPDATA%\WarhammerAccess. This build does not enable speech tracing;
 any existing speech-trace.jsonl may belong to the earlier preview.
 The old native-ui-diagnostic.log is preserved and is not the new capture.
 

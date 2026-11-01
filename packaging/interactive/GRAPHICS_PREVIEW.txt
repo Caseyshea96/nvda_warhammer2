@@ -13,8 +13,8 @@ then position, for example "Recruit Lord, button, 53 of 106".
 INSTALL OR UPDATE
 1. Close the game and the helper. Extract the whole ZIP to a folder.
 2. Run Install.cmd. It finds the Steam game folder (or asks for the folder
-   containing Warhammer2.exe), copies jaws_access.pack into the game's data
-   folder and the helper into %LOCALAPPDATA%\JawsWarhammer2\App. It makes a
+   containing Warhammer2.exe), copies warhammer_access.pack into the game's data
+   folder and the helper into %LOCALAPPDATA%\WarhammerAccess\App. It makes a
    desktop shortcut "Warhammer NVDA Pilot". For a new version, run the new
    ZIP's Install.cmd: it replaces the earlier version and says "Upgraded
    from version ... to ...". No need to uninstall first.
@@ -32,10 +32,10 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.64 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.65 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
-   Mod Manager make sure jaws_access is ticked, then press Play.
+   Mod Manager make sure warhammer_access is ticked, then press Play.
 
 ------------------------------------------------------------------------
 KEYS IN MENUS
@@ -68,7 +68,7 @@ STARTING A CAMPAIGN
        Lord and faction details (Enter: effects, units, race attributes)
        Start Campaign: asks first, press Enter twice.
   Prefer the old single list? Put an empty file lord-list-flat.flag in
-  %LOCALAPPDATA%\JawsWarhammer2 .
+  %LOCALAPPDATA%\WarhammerAccess .
   Then an intro movie plays (Escape skips it), the map loads and a flyover
   plays (about a minute).
 
@@ -142,7 +142,7 @@ FEEDBACK
 Most useful: what you tried, what you expected to hear or press, and what
 felt slow or confusing. Ideas for better keys are very welcome.
 If something breaks, note what you pressed and what was said last, and send
-these files from %LOCALAPPDATA%\JawsWarhammer2 :
+these files from %LOCALAPPDATA%\WarhammerAccess :
   bridge.jsonl, native-ui-graphics-preview.log,
   native-ui-campaign-discovery.jsonl (if present), companion.log
 They contain game screen text only (no passwords).
@@ -152,5 +152,5 @@ Close the game and the helper, then run Uninstall.cmd. Saves and other
 mods are kept.
 
 OPTIONS
-confirm-activations.flag in %LOCALAPPDATA%\JawsWarhammer2 makes every menu
+confirm-activations.flag in %LOCALAPPDATA%\WarhammerAccess makes every menu
 action need two presses within four seconds.

@@ -10,7 +10,7 @@ param(
     [switch]$WithIntro  # with -Direct: play the startup movies (default skips them via work/skip-intro)
 )
 $ErrorActionPreference = 'Stop'
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $app = Join-Path $base 'App'
 [void][IO.Directory]::CreateDirectory($Evidence)
 if (Get-CimInstance Win32_Process -Filter "Name='Warhammer2.exe'") { throw 'Game already running; close it first.' }
@@ -36,7 +36,7 @@ if ($StringFindProbe) { Set-Content -LiteralPath $probe -Value '1' -Encoding Asc
 elseif (Test-Path -LiteralPath $probe) { Remove-Item -LiteralPath $probe }
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $app 'Automation.ps1') -Action Enable -LeaseSeconds $LeaseSeconds
 if ($LASTEXITCODE) { throw 'Lease enable failed.' }
-$companion = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*JawsWarhammer2\App\Companion.ps1*' }
+$companion = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*WarhammerAccess\App\Companion.ps1*' }
 if (-not $companion) {
     $proc = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList @(
         '-NoProfile','-Sta','-ExecutionPolicy','Bypass','-File',(Join-Path $app 'Companion.ps1'),
@@ -49,27 +49,25 @@ $companion | Select-Object ProcessId,Name,ExecutablePath,CommandLine,@{n='Creati
     ConvertTo-Json | Set-Content (Join-Path $Evidence 'owned-companion.json') -Encoding UTF8
 "COMPANION=$($companion.ProcessId)"
 if ($Direct) {
-    # Same command line TW Mod Manager uses; check its list enables only our pack.
-    $mods = Join-Path $env:APPDATA 'The Creative Assembly\TWMM\games\wh2\used_mods.txt'
-    $enabled = @(Get-Content -LiteralPath $mods | Where-Object { $_ -like 'mod *' })
-    if ($enabled.Count -ne 1 -or $enabled[0] -ne 'mod "jaws_access.pack";') { throw "TWMM mod list is not exactly jaws_access.pack: $enabled" }
+    # Same command line TW Mod Manager uses, with our own mod list (TWMM's
+    # own list is never read or changed): the accessibility pack only, plus
+    # the skip-intro pack unless -WithIntro.
     $game = 'C:\Program Files (x86)\Steam\steamapps\common\Total War WARHAMMER II'
+    $skipDir = Join-Path $PSScriptRoot '..\..\work\skip-intro'
+    [void][IO.Directory]::CreateDirectory($skipDir)
+    $skipDir = (Resolve-Path $skipDir).Path
+    $lines = @(('add_working_directory "' + ($game -replace '\\','/') + '/data";'))
     if (-not $WithIntro) {
-        # A test-only mod list beside the skip pack; TWMM's own list is untouched.
-        $skipPack = Join-Path $PSScriptRoot '..\..\work\skip-intro\jaws_skip_intro.pack'
+        $skipPack = Join-Path $skipDir 'warhammer_skip_intro.pack'
         if (-not (Test-Path -LiteralPath $skipPack)) {
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Build-SkipIntro.ps1') | Out-Null
             if ($LASTEXITCODE) { throw 'Skip-intro pack build failed.' }
         }
-        $skipDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..\work\skip-intro')).Path
-        $mods = Join-Path $skipDir 'test_mods.txt'
-        $lines = @(
-            ('add_working_directory "' + ($game -replace '\\','/') + '/data";'),
-            ('add_working_directory "' + ($skipDir -replace '\\','/') + '";'),
-            'mod "jaws_skip_intro.pack";',
-            'mod "jaws_access.pack";')
-        [IO.File]::WriteAllText($mods, ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
+        $lines += @(('add_working_directory "' + ($skipDir -replace '\\','/') + '";'), 'mod "warhammer_skip_intro.pack";')
     }
+    $lines += 'mod "warhammer_access.pack";'
+    $mods = Join-Path $skipDir 'test_mods.txt'
+    [IO.File]::WriteAllText($mods, ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
     Start-Process -FilePath (Join-Path $game 'Warhammer2.exe') -WorkingDirectory $game -ArgumentList ('"' + $mods + '"'),'; -dx11'
     'Direct launch requested. Run Wait-Game.ps1.'
 } else {

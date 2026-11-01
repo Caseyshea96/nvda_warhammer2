@@ -92,7 +92,7 @@ local function start(mode, layout, enable_automation, setup_status_failure, envi
         end
     end
     os.getenv=real_getenv
-    automation_base=(real_getenv('LOCALAPPDATA') or '') .. '/JawsWarhammer2/'
+    automation_base=(real_getenv('LOCALAPPDATA') or '') .. '/WarhammerAccess/'
     -- Most legacy scenarios exercise press-twice confirmation.
     if not single_press and context_mode=='frontend' then files[automation_base .. 'confirm-activations.flag']={'1'} end
     if environment_disappears then
@@ -149,7 +149,7 @@ local function start(mode, layout, enable_automation, setup_status_failure, envi
         if mode == 'w' then files[path] = {} end
         return {write = function(self, text)
             if automation_status_failure and path:find('automation-status.tsv',1,true) then error('fixture status write failure') end
-            if speech_write_throw and (path:find('bridge.jsonl',1,true) or path:find('jaws_access.jsonl',1,true)) then
+            if speech_write_throw and (path:find('bridge.jsonl',1,true) or path:find('warhammer_access.jsonl',1,true)) then
                 speech_write_throw=false; error('fixture speech write exception')
             end
             files[path] = files[path] or {}; files[path][#files[path]+1] = text; return self end,
@@ -170,7 +170,7 @@ local function contents(suffix)
 end
 local function last()
     local bridge = contents('bridge.jsonl')
-    if bridge == '' then bridge = contents('jaws_access.jsonl') end
+    if bridge == '' then bridge = contents('warhammer_access.jsonl') end
     return bridge:match('([^\n]+)\n$') or ''
 end
 -- NVDA-style speech: name, role, value, states, position.
@@ -1260,7 +1260,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.64 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.65 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')

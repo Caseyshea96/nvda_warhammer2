@@ -1,14 +1,19 @@
-# JAWS/NVDA accessibility for Total War: Warhammer II
+# NVDA accessibility for Total War: Warhammer II
 
 Screen-reader access mod. The in-game Lua script writes speech requests to a
-bridge file; the PowerShell companion forwards them to NVDA/JAWS.
+bridge file; the PowerShell companion forwards them to NVDA.
 
 ## Where things are
 
 - `diagnostics/graphics_preview.lua` — the current runtime. The build packs it
-  as `script/_lib/mod/jaws_access.lua`, so in-game errors that name
-  `jaws_access.lua:<line>` refer to this file.
-- `mod/script/_lib/mod/jaws_access.lua` — older interactive pilot source.
+  as `script/_lib/mod/warhammer_access.lua`, so in-game errors that name
+  `warhammer_access.lua:<line>` refer to this file.
+- `diagnostics/campaign_readonly.lua` — the campaign reader, packed as
+  `script/_lib/mod/warhammer_access_campaign.lua`.
+- Names (since 0.6.65): the pack is `warhammer_access.pack`, the app folder
+  `%LOCALAPPDATA%\WarhammerAccess`. Up to 0.6.64 they had other names; the
+  installer moves such an install over (its migration block is the only place
+  the old names appear). NVDA only: the other screen reader's support was removed (owner, Nov 1).
 - `companion/` — Companion.ps1 (speech bridge), Automation.ps1 (test channel).
 - `packaging/pilot/` — Install.ps1 / Uninstall.ps1 shipped in the ZIP.
 - `tests/` — Lua harnesses and Python/PowerShell checks.
@@ -24,7 +29,7 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 ## Current state — read before working
 
 - `docs/AUTOMATION_SESSION.md` — full session history and current stop point.
-- `docs/TRIAL_3_0_6_64.md` — latest: Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
+- `docs/TRIAL_3_0_6_64.md` — latest (also 0.6.65: NVDA only, new names `warhammer_access.pack` / `WarhammerAccess`, migration): Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
 - `docs/FIRST_TRIAL_0_6_60.md` — first outside trial fixes (main menu on other PCs, Continue Campaign, launch without TW Mod Manager, HUD reading on by default; accepted 0.6.60) 0.6.61: "ready" waits for the menu after the intro movies; 0.6.62: Select Lord without exact layout checks; 0.6.63: the installer upgrades in place (trial 2 ran the old build) and "ready" says the version.
 - `docs/SETTLEMENTS_0_6_43.md` — provinces, settlement panel, building and recruiting by keyboard, intro check box, player guide, armies read, silent-reader fix, document reading order and province/unit figures (accepted 0.6.59).
 - `docs/CAMPAIGN_BUTTONS_0_6_39.md` — HUD buttons, End Turn, first turn by keyboard (0.6.38–0.6.42).
@@ -72,7 +77,7 @@ feedback on controls. Prefer keyboard routes over moving the mouse pointer.
 
 ## Speech and input conventions
 
-Follow NVDA conventions (JAWS later): `name, role, value, states, N of M`; the
+Follow NVDA conventions: `name, role, value, states, N of M`; the
 screen name once on arrival; short messages; no engine words or developer
 detail in speech. See docs/SPEECH_CONVENTIONS_0_6_25.md. Keys: arrows/Tab/Home/End/Enter/Space/
 letters via the companion (`-MenuKeys`); Escape and Shift+Tab (Steam overlay)
@@ -93,7 +98,7 @@ Campaign tests: `Start-Session -Direct -CampaignDiscovery` (backs up saves),
 The Codex app may work in this repo in parallel; check `git status` first.
 `Start-Session -StringFindProbe` runs the string.find probe (separate launch).
 `Start-Session -Direct` skips the three startup movies by default: it writes
-`work/skip-intro/test_mods.txt` that also loads `jaws_skip_intro.pack` (empty
+`work/skip-intro/test_mods.txt` that also loads `warhammer_skip_intro.pack` (empty
 `movies/startup_movie_01-03.ca_vp8`, built by `Build-SkipIntro.ps1`). The game
 folder and TWMM's profile are untouched; `-WithIntro` plays them. Without the
 skip the endpoint reports ready while the movies are still playing (menu ~8 s
@@ -102,7 +107,7 @@ for the menu (since 0.6.61: the key timer does not tick during movies). `Watch-S
 startup screenshots.
 `Flyover-Run.ps1` (one timed campaign start + screenshot) and `Zoom-Stress.ps1` (repeated
 camera jumps, checks the reader keeps ticking) test the silent-reader fix;
-`campaign-reader-off.flag` in %LOCALAPPDATA%\JawsWarhammer2 switches the campaign reader off for comparisons.
+`campaign-reader-off.flag` in %LOCALAPPDATA%\WarhammerAccess switches the campaign reader off for comparisons.
 `tests/replay_capture.lua <work/.../native-ui-campaign-discovery.jsonl> [run] [next-run]`
 replays a recorded campaign screen through the reader offline and prints every item as
 spoken (no run: lists runs); use it to check reading changes against real captures.
@@ -125,7 +130,7 @@ The owner approved direct launch (`-Direct`) instead of clicking PLAY in TWMM.
 - Check the screen with `tools/live/Capture-Screen.ps1` and read the PNG when
   no computer-use tool is available; use computer use (if present) only to
   verify the screen and operate Steam / TW Mod Manager.
-- Logs: `%LOCALAPPDATA%\JawsWarhammer2\native-ui-graphics-preview.log`,
+- Logs: `%LOCALAPPDATA%\WarhammerAccess\native-ui-graphics-preview.log`,
   `native-ui-lord-discovery.jsonl`, `bridge.jsonl`.
 
 ## Autonomous build, launch, and testing workflow
@@ -143,7 +148,7 @@ default. This is the required launch method for automated testing.
 ### Mod Manager procedure
 
 1. Wait for TW Mod Manager to appear.
-2. Identify the installed `jaws_access.pack`.
+2. Identify the installed `warhammer_access.pack`.
 3. Verify the current mod is enabled.
 4. Verify that exactly one valid accessibility mod is activated.
 5. If a stale entry is marked "Missing," remove only that profile reference
@@ -182,7 +187,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.64; before it 0.6.63) as the rollback.
+- Preserve the last known working build (0.6.65; before it 0.6.64) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.

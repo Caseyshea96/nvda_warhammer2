@@ -4,7 +4,7 @@
 param([int]$Jumps = 10, [string[]]$Rows = @('Straits of Lothern, list item','Eagle Gate, list item'), [switch]$SkipTab)
 $ErrorActionPreference = 'Stop'
 $live = $PSScriptRoot
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $status = Join-Path $base 'campaign-discovery-status.json'
 function Age { ((Get-Date).ToUniversalTime() - (Get-Item $status).LastWriteTimeUtc).TotalSeconds }
 function Phase { try { ((Get-Content $status -Raw) | ConvertFrom-Json).phase } catch { '?' } }

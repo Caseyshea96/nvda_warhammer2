@@ -6,10 +6,10 @@ param(
 $ErrorActionPreference = 'Stop'
 # Read-only desktop diagnostic. Run outside an AppContainer when process
 # presence matters; a sandbox may hide the real desktop's processes.
-$pilotBase = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$pilotBase = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $receipt = Get-Content -LiteralPath (Join-Path $pilotBase 'receipt.json') -Raw | ConvertFrom-Json
 $manifest = Get-Content -LiteralPath (Join-Path $pilotBase 'App\manifest.json') -Raw | ConvertFrom-Json
-$packPath = Join-Path $receipt.game_path 'data\jaws_access.pack'
+$packPath = Join-Path $receipt.game_path 'data\warhammer_access.pack'
 $packHash = (Get-FileHash -LiteralPath $packPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $nativePath = Join-Path $pilotBase 'native-ui-graphics-preview.log'
 $nativeText = if (Test-Path -LiteralPath $nativePath) { [IO.File]::ReadAllText($nativePath) } else { '' }
@@ -24,7 +24,7 @@ $result = [ordered]@{
     expected_version = $ExpectedVersion
     installed_version = $receipt.version
     installed_version_matches = ($receipt.version -eq $ExpectedVersion -and $manifest.version -eq $ExpectedVersion)
-    installed_pack_matches = ($packHash -eq $receipt.pack_sha256 -and $packHash -eq $manifest.files.'jaws_access.pack')
+    installed_pack_matches = ($packHash -eq $receipt.pack_sha256 -and $packHash -eq $manifest.files.'warhammer_access.pack')
     native_log_header = $header
     native_version_matches = ($header -eq ('WH2 native UI diagnostic ' + $ExpectedVersion))
     native_shortcut_events = $shortcutCount

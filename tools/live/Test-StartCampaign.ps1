@@ -7,7 +7,7 @@ param(
     [int]$WatchSeconds = 150
 )
 $ErrorActionPreference = 'Stop'
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $helper = Join-Path $base 'App\Automation.ps1'
 $log = Join-Path $base 'native-ui-graphics-preview.log'
 $full = "$Version-nvda-automation-preview"

@@ -4,7 +4,7 @@
 if not core:is_campaign() or core:is_battle() then return end
 local base=os.getenv('LOCALAPPDATA')
 if type(base)~='string' or base=='' then return end
-base=base .. '/JawsWarhammer2/'
+base=base .. '/WarhammerAccess/'
 -- Test-only switch for comparing the game with and without the campaign reader.
 do local off=io.open(base .. 'campaign-reader-off.flag','r'); if off then off:close(); return end end
 local function utc() return os.date('!%Y-%m-%dT%H:%M:%SZ') end
@@ -28,7 +28,7 @@ local initial,owner,expiry,mode=read_flag()
 local diagnostic=initial~=nil
 if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player' end
 local session='campaign:' .. owner .. ':' .. tostring({})
-local version='0.6.64'
+local version='0.6.65'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0

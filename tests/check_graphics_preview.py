@@ -4,7 +4,7 @@ import ctypes
 import os
 root = Path(__file__).resolve().parents[1]
 os.chdir(root)
-base = (root / 'diagnostics/jaws_access.lua').read_text(encoding='utf-8')
+base = (root / 'diagnostics/native_ui_diagnostic.lua').read_text(encoding='utf-8')
 source = (root / 'diagnostics/graphics_preview.lua').read_text(encoding='utf-8')
 def tree(text):
     return text[text.index('local function capture_tree('):text.index('local function capture(source)')]

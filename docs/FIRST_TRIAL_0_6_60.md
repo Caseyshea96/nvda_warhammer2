@@ -43,12 +43,12 @@ Feedback from trial run 1 on the owner's friend's PC (0.6.59):
   read the HUD (developer verify mode had hidden this in every live test).
 - **One-step launch without TW Mod Manager** (`Launch-Game` in
   `companion/Companion.ps1`, used by the desktop shortcut / Start Pilot.cmd):
-  writes `%LOCALAPPDATA%\JawsWarhammer2\nvda_mods.txt` (`add_working_directory
-  "<game>/data"; mod "jaws_access.pack";`) and starts `Warhammer2.exe` with it
+  writes `%LOCALAPPDATA%\WarhammerAccess\nvda_mods.txt` (`add_working_directory
+  "<game>/data"; mod "warhammer_access.pack";`) and starts `Warhammer2.exe` with it
   and `; -dx11`, the command line TW Mod Manager's Play uses. Says "Starting
   Warhammer with the accessibility mod. The intro movies play first; Escape
   skips them." Needs Steam running and the installed pack; otherwise it falls
-  back to Steam and says to tick jaws_access in the Mod Manager. Only the
+  back to Steam and says to tick warhammer_access in the Mod Manager. Only the
   accessibility mod is loaded this way. The launch button is "Launch game".
   As before, the game is launched only after NVDA speech is confirmed.
 - Player guide and installer messages updated.
@@ -162,8 +162,8 @@ or later: on the main menu Enter goes to `activate_player_target`, which never
 says "Could not verify", and Continue Campaign is an allowed target. His game
 was still running 0.6.59.
 
-Cause: `packaging/pilot/Install.ps1` refused to replace any `jaws_access.pack`
-whose checksum differed from the new one ("A different jaws_access.pack
+Cause: `packaging/pilot/Install.ps1` refused to replace any `warhammer_access.pack`
+whose checksum differed from the new one ("A different warhammer_access.pack
 exists…"), and any App file that differed. Every earlier version differs, so
 installing a new ZIP over the old one always failed and left the old build in
 place; the guide said "INSTALL (once)" and did not say to uninstall first.

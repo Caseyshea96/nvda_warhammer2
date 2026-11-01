@@ -33,7 +33,7 @@ io={open=function(path,mode)
 end}
 effect={trigger_shortcut=function() error("Diagnostic must not send input") end}
 function n:SimulateLClick() error("Diagnostic must not click") end
-dofile("diagnostics/jaws_access.lua")
+dofile("diagnostics/native_ui_diagnostic.lua")
 local function fire(event,c) local l=listeners[event]; if l and l[1](c) then l[2](c) end end
 created()
 fire("ShortcutTriggered",{string="script_F4"})
@@ -60,7 +60,7 @@ assert(bridge_text:find('Controls, 1 of 1: Keyboard choice'))
 local original_core = core
 core = {is_campaign=function() return true end, is_battle=function() return false end}
 local previous = text
-dofile("diagnostics/jaws_access.lua")
+dofile("diagnostics/native_ui_diagnostic.lua")
 for path,contents in pairs(files) do if path:find("native%-ui%-diagnostic.log") then assert(contents==previous) end end
 core = original_core
 print("PASS: read-only F2/F3 browser, one-shot bounded tree, labels, lifecycle, opaque addresses and per-method errors")

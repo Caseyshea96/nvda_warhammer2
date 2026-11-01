@@ -11,7 +11,7 @@ $tmp = Join-Path $root ('local/bridge-test-' + [Guid]::NewGuid().ToString('N'))
 try {
     $path = Join-Path $tmp 'events.jsonl'
     [IO.File]::WriteAllText($path, ((Line 'old' 1 'stale') + "`n"))
-    $tail = [JawsPilot.Tail]::new($path, $true)
+    $tail = [WarhammerAccessibility.Tail]::new($path, $true)
     Assert ($tail.Poll().Count -eq 0) 'Must skip preexisting history'
     $text = (Line 'current' 1 'Café') + "`n"
     $bytes = [Text.Encoding]::UTF8.GetBytes($text)

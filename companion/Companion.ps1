@@ -3,10 +3,10 @@ param(
     [switch]$Launch,
     [switch]$Console,
     [string]$ReplayFile,
-    [switch]$NoHotkeys,
+    [switch]$NoHotkeys,  # accepted for older shortcuts; the companion has no global hotkeys
     [switch]$MenuKeys,
     [switch]$TraceSpeech,
-    [ValidateSet('Jaws','Nvda')][string]$ScreenReader = 'Jaws'
+    [ValidateSet('Nvda')][string]$ScreenReader = 'Nvda'  # NVDA only
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Protocol.ps1')
@@ -20,22 +20,13 @@ if ($ReplayFile) {
     }
     exit 0
 }
-$buildVersion = '0.2.5-dev'
+$buildVersion = 'development'
 $packageManifestPath = Join-Path $PSScriptRoot 'manifest.json'
+$packageManifest = $null
 if (Test-Path -LiteralPath $packageManifestPath) {
     $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw | ConvertFrom-Json
     if ($packageManifest.version) { $buildVersion = [string]$packageManifest.version }
-    if ($packageManifest.stage -eq 'read-only-native-ui-diagnostic') {
-        # This safety boundary is enforced here as well as by the launcher. A
-        # direct invocation of the packaged companion must remain read-only.
-        $NoHotkeys = $true
-        $ScreenReader = 'Nvda'
-    }
-    if ($packageManifest.stage -eq 'frontend-activation-preview') {
-        $NoHotkeys = $true
-        $ScreenReader = 'Nvda'
-        $TraceSpeech = $true
-    }
+    if ($packageManifest.stage -eq 'frontend-activation-preview') { $TraceSpeech = $true }
 }
 if (-not $GamePath) {
     $configPath = Join-Path $PSScriptRoot 'config.json'
@@ -44,19 +35,16 @@ if (-not $GamePath) {
 if (-not $GamePath -or -not (Test-Path -LiteralPath (Join-Path $GamePath 'Warhammer2.exe'))) {
     throw 'Game path missing. Run the installer or supply -GamePath.'
 }
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 [void][IO.Directory]::CreateDirectory($base)
 $lockStream = $null
 try { $lockStream = [IO.File]::Open((Join-Path $base 'companion.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
 catch { Write-Host 'The companion is already running. Close its window before starting another.'; exit 1 }
 
 try {
-    $readerName = $(if ($ScreenReader -eq 'Nvda') { 'NVDA' } else { 'JAWS' })
-    $script:Jaws = $null; $script:NvdaConnected = $false
-    $script:Muted = $false; $script:HoverEnabled = $false
-    $script:Last = 'Warhammer accessibility pilot is ready.'; $script:Step = 40; $script:LastHover = ''
-    $script:LastHotkeyError = ''
-    $script:PendingClick = $null; $script:ClickDeadline = [DateTime]::MinValue
+    $script:NvdaConnected = $false
+    $script:Muted = $false
+    $script:Last = 'Warhammer accessibility is ready.'
     $script:StatusText = ''; $script:StatusControl = $null
     $script:LastError = ''; $script:LastErrorTime = [DateTime]::MinValue
     $diagnostic = Join-Path $base 'companion.log'
@@ -94,91 +82,65 @@ try {
     }
     function Connect-ScreenReader {
         if ($Console) { return $true }
-        if ($ScreenReader -eq 'Nvda') {
-            try {
-                if (-not ('WarhammerAccessibility.NvdaController' -as [type])) {
-                    Add-Type -Path (Join-Path $PSScriptRoot 'NvdaController.cs')
-                }
-                [WarhammerAccessibility.NvdaController]::Initialize((Join-Path $PSScriptRoot 'nvdaControllerClient.dll'))
-                $code = [WarhammerAccessibility.NvdaController]::TestIfRunning()
-                if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
-                $script:NvdaConnected = $true
-                Set-Status 'NVDA connected. Waiting for game messages.'
-                return $true
-            } catch {
-                $script:NvdaConnected = $false
-                Set-Status 'NVDA unavailable. Start NVDA, then choose Test NVDA to reconnect.'
-                Log-Error $_.Exception.Message
-                return $false
-            }
-        }
         try {
-            $script:Jaws = New-Object -ComObject 'FreedomSci.JawsApi'
-            Set-Status 'JAWS connected. Waiting for game messages.'
+            if (-not ('WarhammerAccessibility.NvdaController' -as [type])) {
+                Add-Type -Path (Join-Path $PSScriptRoot 'NvdaController.cs')
+            }
+            [WarhammerAccessibility.NvdaController]::Initialize((Join-Path $PSScriptRoot 'nvdaControllerClient.dll'))
+            $code = [WarhammerAccessibility.NvdaController]::TestIfRunning()
+            if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
+            $script:NvdaConnected = $true
+            Set-Status 'NVDA connected. Waiting for game messages.'
             return $true
         } catch {
-            $script:Jaws = $null
-            Set-Status 'JAWS unavailable. Start JAWS, then choose Test JAWS to reconnect.'
+            $script:NvdaConnected = $false
+            Set-Status 'NVDA unavailable. Start NVDA, then choose Test NVDA to reconnect.'
             Log-Error $_.Exception.Message
             return $false
         }
     }
     function Speak([string]$Text, [switch]$Force) {
         $script:SpeechRequestId++
-        Write-SpeechTrace 'request' @{ text = $Text; characters = $Text.Length; reader = $ScreenReader;
+        Write-SpeechTrace 'request' @{ text = $Text; characters = $Text.Length; reader = 'Nvda';
             muted = [bool]$script:Muted; forced = [bool]$Force; connected = [bool]$script:NvdaConnected }
         $script:Last = $Text
         if ($Console) { Write-Output $Text; return }
         if ($script:Muted -and -not $Force) { return }
-        if ($ScreenReader -eq 'Nvda') {
-            if (-not $script:NvdaConnected) { return }
-            try {
-                $code = [WarhammerAccessibility.NvdaController]::Speak($Text, $true)
-                Write-SpeechTrace 'nvda-return' @{ code = $code; interrupt_previous = $true }
-                if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
-                $brailleCode = [WarhammerAccessibility.NvdaController]::Braille($Text)
-                if ($brailleCode -ne 0) { Log-Error ('NVDA braille output failed: ' + $brailleCode) }
-            } catch {
-                $script:NvdaConnected = $false
-                Write-SpeechTrace 'nvda-error' @{ message = $_.Exception.Message }
-                Set-Status 'NVDA disconnected. Start NVDA, then choose Test NVDA to reconnect.'
-                Log-Error $_.Exception.Message
-            }
-            return
-        }
-        if (-not $script:Jaws) { return }
+        if (-not $script:NvdaConnected) { return }
         try {
-            $ok = $script:Jaws.SayString($Text, $true)
-            if ($ok -eq $false) { throw 'JAWS rejected speech. Check that JAWS is running.' }
-        } catch { $script:Jaws = $null; Set-Status 'JAWS disconnected. Choose Test JAWS to reconnect.'; Log-Error $_.Exception.Message }
+            $code = [WarhammerAccessibility.NvdaController]::Speak($Text, $true)
+            Write-SpeechTrace 'nvda-return' @{ code = $code; interrupt_previous = $true }
+            if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
+            $brailleCode = [WarhammerAccessibility.NvdaController]::Braille($Text)
+            if ($brailleCode -ne 0) { Log-Error ('NVDA braille output failed: ' + $brailleCode) }
+        } catch {
+            $script:NvdaConnected = $false
+            Write-SpeechTrace 'nvda-error' @{ message = $_.Exception.Message }
+            Set-Status 'NVDA disconnected. Start NVDA, then choose Test NVDA to reconnect.'
+            Log-Error $_.Exception.Message
+        }
     }
     function Stop-Speech {
         Write-SpeechTrace 'stop-request' @{}
-        if ($ScreenReader -eq 'Nvda') {
-            if ($script:NvdaConnected) {
-                try {
-                    $code = [WarhammerAccessibility.NvdaController]::CancelSpeech()
-                    if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
-                } catch { $script:NvdaConnected = $false; Log-Error $_.Exception.Message }
-            }
-            return
-        }
-        if ($script:Jaws) { try { $script:Jaws.StopSpeech() } catch { Log-Error $_.Exception.Message } }
+        if (-not $script:NvdaConnected) { return }
+        try {
+            $code = [WarhammerAccessibility.NvdaController]::CancelSpeech()
+            if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
+        } catch { $script:NvdaConnected = $false; Log-Error $_.Exception.Message }
     }
     function Test-Speech {
         if (-not (Connect-ScreenReader)) { return $false }
-        Speak ('Warhammer accessibility pilot. ' + $readerName + ' speech test successful.') -Force
+        Speak 'Warhammer accessibility. NVDA speech test successful.' -Force
         return $true
     }
     function Toggle-Mute {
         $script:Muted = -not $script:Muted
         Stop-Speech
-        Speak $(if ($script:Muted) { 'Pilot speech muted.' } else { 'Pilot speech enabled.' }) -Force
+        Speak $(if ($script:Muted) { 'Speech muted.' } else { 'Speech enabled.' }) -Force
     }
     function Launch-Game {
-        $connected = $(if ($ScreenReader -eq 'Nvda') { $script:NvdaConnected } else { $null -ne $script:Jaws })
-        if (-not $connected -and -not (Connect-ScreenReader)) {
-            Set-Status ($readerName + ' must be connected before the game can launch.')
+        if (-not $script:NvdaConnected -and -not (Connect-ScreenReader)) {
+            Set-Status 'NVDA must be connected before the game can launch.'
             return $false
         }
         if (Get-Process -Name Warhammer2 -ErrorAction SilentlyContinue) {
@@ -189,31 +151,31 @@ try {
         # TW Mod Manager's Play uses, so no launcher window has to be read.
         # Needs Steam running and the installed pack; otherwise use Steam.
         $exe = $(if ($GamePath) { Join-Path $GamePath 'Warhammer2.exe' } else { '' })
-        $pack = $(if ($GamePath) { Join-Path $GamePath 'data\jaws_access.pack' } else { '' })
+        $pack = $(if ($GamePath) { Join-Path $GamePath 'data\warhammer_access.pack' } else { '' })
         $steamRunning = [bool](Get-Process -Name steam -ErrorAction SilentlyContinue)
         if ($exe -and (Test-Path -LiteralPath $exe -PathType Leaf) -and (Test-Path -LiteralPath $pack -PathType Leaf) -and $steamRunning) {
             $list = Join-Path $base 'nvda_mods.txt'
-            $lines = @(('add_working_directory "' + ((Join-Path $GamePath 'data') -replace '\\','/') + '";'), 'mod "jaws_access.pack";')
+            $lines = @(('add_working_directory "' + ((Join-Path $GamePath 'data') -replace '\\','/') + '";'), 'mod "warhammer_access.pack";')
             [IO.File]::WriteAllText($list, ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
             Start-Process -FilePath $exe -WorkingDirectory $GamePath -ArgumentList ('"' + $list + '"'),'; -dx11'
             Set-Status 'Starting Warhammer with the accessibility mod.'
-            Speak 'Starting Warhammer with the accessibility mod. The intro movies play first; Escape skips them.' -Force
+            Speak 'Starting Warhammer with the accessibility mod.' -Force
         } else {
             Start-Process 'steam://rungameid/594570'
             $why = $(if (-not $steamRunning) { 'Steam is not running, so the game starts through Steam.' } else { 'The game starts through Steam.' })
             Set-Status $why
-            Speak ($why + ' In the Mod Manager, make sure jaws access is ticked, then press Play.') -Force
+            Speak ($why + ' In the Mod Manager, make sure warhammer access is ticked, then press Play.') -Force
         }
         return $true
     }
     $tails = @(
-        [JawsPilot.Tail]::new((Join-Path $base 'bridge.jsonl'), $true),
-        [JawsPilot.Tail]::new((Join-Path $GamePath 'jaws_access.jsonl'), $true)
+        [WarhammerAccessibility.Tail]::new((Join-Path $base 'bridge.jsonl'), $true),
+        [WarhammerAccessibility.Tail]::new((Join-Path $GamePath 'warhammer_access.jsonl'), $true)
     )
     $states = @((New-ProtocolState), (New-ProtocolState))
-    # Standard menu keys (arrows, Tab, Home/End, Enter/Space, letters) go to the
-    # mod through keys.tsv, only while the game is focused and the mod's
-    # reader-state.tsv heartbeat is fresh and reports the frontend.
+    # Standard menu keys (arrows, Tab, Home/End, Enter/Space, Backspace,
+    # letters) go to the mod through keys.tsv, only while the game is focused
+    # and the mod's reader-state.tsv heartbeat is fresh and reports the frontend.
     $script:MenuKeysObj = $null
     $script:KeyOwner = [guid]::NewGuid().ToString('N')
     $script:KeySeq = 0
@@ -260,33 +222,13 @@ try {
             }
             $script:LastMenuKeyFailures = $failures
         }
-        if (-not $Console -and $keys) {
-            $failures = $keys.UpdateFocus(-not $NoHotkeys)
-            $failureKey = $failures -join ','
-            if ($failures.Count -and $failureKey -ne $script:LastHotkeyError) {
-                Log-Error ('Shortcut registration/release failed for IDs: ' + ($failures -join ','))
-                Speak 'Some companion shortcuts could not be registered or released. See the diagnostic log.' -Force
-            }
-            $script:LastHotkeyError = $failureKey
-        }
-        if ($null -ne $script:PendingClick -and -not $Console) {
-            if (-not [JawsPilot.Pointer]::GameFocused() -or [DateTime]::UtcNow -gt $script:ClickDeadline) {
-                $script:PendingClick = $null
-                Speak 'Pending click cancelled.'
-            } elseif ([JawsPilot.Pointer]::ModifiersReleased()) {
-                $right = [bool]$script:PendingClick
-                $script:PendingClick = $null
-                Speak ([JawsPilot.Pointer]::Click($right))
-            }
-        }
-        $latest = $null; $lastHoverRecord = $null; $batch = New-SpeechBatch
+        $latest = $null; $batch = New-SpeechBatch
         for ($i = 0; $i -lt $tails.Count; $i++) {
             try {
                 foreach ($line in $tails[$i].Poll()) {
                     $r = Convert-BridgeRecord $line $states[$i]
-                    if ($null -eq $r) { continue }
-                    if ($r.kind -eq 'hover') { $lastHoverRecord = $r }
-                    else { $latest = $r; Add-SpeechRecord $batch $r }
+                    if ($null -eq $r -or $r.kind -eq 'hover') { continue }
+                    $latest = $r; Add-SpeechRecord $batch $r
                 }
             } catch { Log-Error $_.Exception.Message }
         }
@@ -294,9 +236,6 @@ try {
             Set-Status ('Connected to game: ' + $latest.context + '. Last message: ' + $latest.text.Substring(0, [Math]::Min(100, $latest.text.Length)))
             if ($batch.Dropped) { Log-Error ("Speech batch overflow: " + $batch.Dropped + " records; original messages remain in the bridge file.") }
             Speak (Get-SpeechBatchText $batch)
-        } elseif ($lastHoverRecord -and $script:HoverEnabled -and $lastHoverRecord.text -ne $script:LastHover) {
-            $script:LastHover = $lastHoverRecord.text
-            Speak $lastHoverRecord.text
         }
     }
     if ($Console) {
@@ -305,10 +244,6 @@ try {
     }
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    if (-not $NoHotkeys) {
-        Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'HotkeyPolicy.cs')) -ReferencedAssemblies @('System.dll','System.Windows.Forms.dll')
-        [void][JawsPilot.Pointer]::SetProcessDPIAware()
-    }
     if ($MenuKeys) {
         Add-Type -Path (Join-Path $PSScriptRoot 'MenuKeys.cs') -ReferencedAssemblies @('System.dll','System.Windows.Forms.dll')
         $script:MenuKeysObj = [WarhammerAccessibility.MenuKeys]::new()
@@ -321,18 +256,16 @@ try {
     }
     [System.Windows.Forms.Application]::EnableVisualStyles()
     $form = New-Object Windows.Forms.Form
-    $form.Text = $(if ($NoHotkeys) { 'Warhammer II ' + $readerName + ' read-only keyboard browser ' + $buildVersion } else { 'Warhammer II ' + $readerName + ' Pilot ' + $buildVersion })
-    if ($packageManifest.stage -eq 'frontend-activation-preview') { $form.Text = 'Warhammer II NVDA frontend accessibility preview ' + $buildVersion }
+    $form.Text = 'Warhammer II NVDA accessibility ' + $buildVersion
     $form.Width = 700; $form.Height = 490
     $form.StartPosition = 'CenterScreen'
     $panel = New-Object Windows.Forms.FlowLayoutPanel
     $panel.Dock = 'Fill'; $panel.FlowDirection = 'TopDown'; $panel.WrapContents = $false; $panel.AutoScroll = $true
     $form.Controls.Add($panel)
     $label = New-Object Windows.Forms.Label
-    $label.Text = 'Experimental co-op accessibility pilot. Enable jaws_access in the game Mod Manager. F2 next, F3 previous, F4 twice to activate. Ctrl+F2 changes category.'
-    if ($NoHotkeys) { $label.Text = 'Read-only keyboard browser: companion global hotkeys disabled. In the main menu, tap F2 for next or F3 for previous. F4 is disabled. No mouse or game command is used.' }
-    if ($packageManifest.stage -eq 'frontend-activation-preview') {
-        $label.Text = 'In the game menus: Up and Down arrows or Tab move, Home and End jump, Enter or Space activates, a letter jumps to the next item starting with it, Escape goes back. F2, F3 and F4 also work.'
+    $label.Text = 'Read-only keyboard browser. In the main menu, tap F2 for next or F3 for previous. F4 is disabled. No mouse or game command is used.'
+    if ($packageManifest -and $packageManifest.stage -eq 'frontend-activation-preview') {
+        $label.Text = 'In the game menus: Up and Down arrows or Tab move, Home and End jump, Enter or Space activates, Backspace goes back a step, a letter jumps to the next item starting with it, Escape is the game''s Back key. F2, F3 and F4 also work.'
     }
     $label.Width = 650; $label.Height = 60; $panel.Controls.Add($label)
     $script:StatusControl = New-Object Windows.Forms.TextBox
@@ -345,41 +278,12 @@ try {
         $button.Text = $Name; $button.Width = 640; $button.Height = 29
         $button.Add_Click($Action); $panel.Controls.Add($button)
     }
-    Add-Button ('&Test ' + $readerName + ' / reconnect') { [void](Test-Speech) }
+    Add-Button '&Test NVDA / reconnect' { [void](Test-Speech) }
     Add-Button '&Launch game' { [void](Launch-Game) }
-    Add-Button $(if ($NoHotkeys) { '&Repeat last message' } else { '&Repeat last message (Ctrl+Alt+R)' }) { Speak $script:Last -Force }
-    Add-Button $(if ($NoHotkeys) { '&Stop speech' } else { '&Stop speech (Ctrl+Alt+S)' }) { Stop-Speech }
-    Add-Button $(if ($NoHotkeys) { '&Mute / unmute' } else { '&Mute / unmute (Ctrl+Alt+M)' }) { Toggle-Mute }
-    if (-not $NoHotkeys) {
-        Add-Button 'Toggle &hover speech (Ctrl+Alt+H)' {
-            $script:HoverEnabled = -not $script:HoverEnabled
-            Speak $(if ($script:HoverEnabled) { 'Hover speech on.' } else { 'Hover speech off.' })
-        }
-    }
+    Add-Button '&Repeat last message' { Speak $script:Last -Force }
+    Add-Button '&Stop speech' { Stop-Speech }
+    Add-Button '&Mute / unmute' { Toggle-Mute }
     Add-Button '&Open diagnostic folder' { Start-Process explorer.exe -ArgumentList $base }
-    $keys = $null
-    # Ctrl+Alt: R/S/M/H, arrows, Enter, Space, C to center, F fine/coarse.
-    $keyCodes = @(82,83,77,72,37,38,39,40,13,32,67,70)
-    if (-not $NoHotkeys) {
-        $keys = [JawsPilot.Hotkeys]::new()
-        for ($i = 0; $i -lt $keyCodes.Count; $i++) { $keys.Configure($i + 1, $keyCodes[$i]) }
-        $keys.Add_Pressed({ param($sender, $eventArgs)
-        switch ($eventArgs.Id) {
-            1 { Speak $script:Last -Force }
-            2 { Stop-Speech }
-            3 { Toggle-Mute }
-            4 { $script:HoverEnabled = -not $script:HoverEnabled; Speak $(if ($script:HoverEnabled) { 'Hover speech on.' } else { 'Hover speech off.' }) }
-            5 { Speak ([JawsPilot.Pointer]::Move(-$script:Step,0,$false)) }
-            6 { Speak ([JawsPilot.Pointer]::Move(0,-$script:Step,$false)) }
-            7 { Speak ([JawsPilot.Pointer]::Move($script:Step,0,$false)) }
-            8 { Speak ([JawsPilot.Pointer]::Move(0,$script:Step,$false)) }
-            9 { $script:PendingClick = $true; $script:ClickDeadline = [DateTime]::UtcNow.AddSeconds(2); Speak 'Release modifiers to right click.' }
-            10 { $script:PendingClick = $false; $script:ClickDeadline = [DateTime]::UtcNow.AddSeconds(2); Speak 'Release modifiers to left click.' }
-            11 { Speak ([JawsPilot.Pointer]::Move(0,0,$true)) }
-            12 { $script:Step = $(if ($script:Step -eq 40) { 5 } else { 40 }); Speak ('Cursor step ' + $script:Step + ' pixels.') }
-        }
-        })
-    }
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 100
     $timer.Add_Tick({ Read-Bridge })
@@ -387,12 +291,12 @@ try {
         $connected = Test-Speech
         $timer.Start()
         if ($Launch -and $connected) { [void](Launch-Game) }
-        elseif ($Launch) { Set-Status ($readerName + ' must be connected before the game can launch.') }
+        elseif ($Launch) { Set-Status 'NVDA must be connected before the game can launch.' }
     })
     try { [void]$form.ShowDialog() }
-    finally { $timer.Stop(); $timer.Dispose(); if ($keys) { $keys.Dispose() }; if ($script:MenuKeysObj) { $script:MenuKeysObj.Dispose() }; $form.Dispose(); Stop-Speech }
+    finally { $timer.Stop(); $timer.Dispose(); if ($script:MenuKeysObj) { $script:MenuKeysObj.Dispose() }; $form.Dispose(); Stop-Speech }
 } catch {
-    Write-Host ('Warhammer accessibility pilot failed: ' + $_.Exception.Message)
+    Write-Host ('Warhammer accessibility failed: ' + $_.Exception.Message)
     if (Get-Command Log-Error -ErrorAction SilentlyContinue) { Log-Error $_.Exception.Message }
     exit 1
 } finally { if ($lockStream) { $lockStream.Dispose() } }

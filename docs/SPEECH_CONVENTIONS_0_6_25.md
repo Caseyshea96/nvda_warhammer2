@@ -1,7 +1,7 @@
 # NVDA-style speech 0.6.24–0.6.25 — October 29, 2026
 
 The owner asked for the mod to follow normal screen reader conventions, NVDA
-first (JAWS later). This step changes speech only; keys (F2/F3/F4) and the
+first. This step changes speech only; keys (F2/F3/F4) and the
 double-F4 activation are unchanged and are the next steps.
 
 ## Format

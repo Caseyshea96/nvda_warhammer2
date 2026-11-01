@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using System.Collections.Generic;
 
-namespace JawsPilot {
+namespace WarhammerAccessibility {
     // Binary incremental tail: UTF-8 characters and records may span writes.
     public sealed class Tail {
         public readonly string Path;

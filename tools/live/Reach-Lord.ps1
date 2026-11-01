@@ -3,7 +3,7 @@
 # Visually confirm the main menu before running, and Select Lord afterwards.
 param([Parameter(Mandatory=$true)][string]$Version, [Parameter(Mandatory=$true)][string]$Evidence)
 $ErrorActionPreference = 'Stop'
-$helper = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2\App\Automation.ps1'
+$helper = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\App\Automation.ps1'
 $full = "$Version-nvda-automation-preview"
 [void][IO.Directory]::CreateDirectory($Evidence)
 $results = [Collections.Generic.List[object]]::new()

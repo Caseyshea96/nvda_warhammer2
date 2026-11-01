@@ -3,7 +3,7 @@
 # arrival; no engine words or developer messages in item announcements.
 param([Parameter(Mandatory=$true)][string]$Evidence)
 $ErrorActionPreference = 'Stop'
-$bridge = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2\bridge.jsonl'
+$bridge = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\bridge.jsonl'
 $texts = @(Get-Content -LiteralPath $bridge -Encoding UTF8 | ForEach-Object { ($_ | ConvertFrom-Json).text })
 $texts | Set-Content -LiteralPath (Join-Path $Evidence 'spoken.txt') -Encoding UTF8
 $items = @($texts | Where-Object { $_ -match ', \d+ of \d+(, |$)' })

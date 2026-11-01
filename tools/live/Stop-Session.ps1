@@ -2,7 +2,7 @@
 # owned by this session (matched on PID, executable path and start time).
 param([Parameter(Mandatory=$true)][string]$Evidence)
 $ErrorActionPreference = 'Stop'
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $base 'App\Automation.ps1') -Action Disable
 if ($LASTEXITCODE) { 'WARNING: lease disable reported failure' }
 $statusPath = Join-Path $base 'automation-status.tsv'

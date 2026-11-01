@@ -23,25 +23,25 @@ try {
     if ($LASTEXITCODE) { throw 'Campaign read-only client checks failed' }
     $stage = Join-Path $root ('artifacts/graphics-preview-build-' + [guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($stage)
-    $pack = Join-Path $stage 'jaws_access.pack'
+    $pack = Join-Path $stage 'warhammer_access.pack'
     & $rpfm --game warhammer_2 pack create -p $pack
     if ($LASTEXITCODE) { throw 'Pack creation failed' }
     & $rpfm --game warhammer_2 pack set-file-type -p $pack -f mod
     if ($LASTEXITCODE) { throw 'Pack type failed' }
-    & $rpfm --game warhammer_2 pack add -p $pack -f ($source + ';script/_lib/mod/jaws_access.lua')
+    & $rpfm --game warhammer_2 pack add -p $pack -f ($source + ';script/_lib/mod/warhammer_access.lua')
     if ($LASTEXITCODE) { throw 'Pack insertion failed' }
     $campaignSource = Join-Path $root 'diagnostics/campaign_readonly.lua'
-    & $rpfm --game warhammer_2 pack add -p $pack -f ($campaignSource + ';script/_lib/mod/jaws_campaign_readonly.lua')
+    & $rpfm --game warhammer_2 pack add -p $pack -f ($campaignSource + ';script/_lib/mod/warhammer_access_campaign.lua')
     if ($LASTEXITCODE) { throw 'Campaign discovery insertion failed' }
     $roundtrip = Join-Path $stage 'roundtrip'
     & $rpfm --game warhammer_2 pack extract -p $pack -F ('/;' + $roundtrip)
     if ($LASTEXITCODE) { throw 'Pack extraction failed' }
-    $extracted = Join-Path $roundtrip 'script/_lib/mod/jaws_access.lua'
+    $extracted = Join-Path $roundtrip 'script/_lib/mod/warhammer_access.lua'
     if ((Get-FileHash $source).Hash -ne (Get-FileHash $extracted).Hash) { throw 'Roundtrip differs from source' }
-    if ((Get-FileHash $campaignSource).Hash -ne (Get-FileHash (Join-Path $roundtrip 'script/_lib/mod/jaws_campaign_readonly.lua')).Hash) { throw 'Campaign discovery roundtrip differs from source' }
-    $output = Join-Path $root 'artifacts/jaws_access_graphics_preview.pack'
+    if ((Get-FileHash $campaignSource).Hash -ne (Get-FileHash (Join-Path $roundtrip 'script/_lib/mod/warhammer_access_campaign.lua')).Hash) { throw 'Campaign discovery roundtrip differs from source' }
+    $output = Join-Path $root 'artifacts/warhammer_access_graphics_preview.pack'
     Copy-Item -LiteralPath $pack -Destination $output -Force
-    ((Get-FileHash $output).Hash.ToLowerInvariant() + '  jaws_access_graphics_preview.pack') | Set-Content ($output + '.sha256') -Encoding Ascii
+    ((Get-FileHash $output).Hash.ToLowerInvariant() + '  warhammer_access_graphics_preview.pack') | Set-Content ($output + '.sha256') -Encoding Ascii
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/package-nvda-addon.ps1
     if ($LASTEXITCODE) { throw 'Add-on packaging failed' }
     & $Python -X utf8 tools/package-pilot.py --graphics-preview

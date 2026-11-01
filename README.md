@@ -1,33 +1,36 @@
-# Warhammer II screen-reader accessibility pilot
+# Warhammer II NVDA accessibility
 
-Experimental Windows accessibility integration for Total War: WARHAMMER II.
+A keyboard and NVDA screen-reader prototype for Total War: WARHAMMER II, built
+so a blind player can try the game and give feedback on the controls.
 
-**Accepted installed build: 0.6.28.** Native menu navigation, lord selection,
-NVDA-style speech, standard menu keys and confirmed Start Campaign have passed
-live testing. Campaign-map actions, gameplay and co-op remain unavailable.
+**Current build: 0.6.65.** Menus (New Campaign, Continue Campaign, Select
+Campaign including Mortal Empires), Select Lord as a sequence of choices (race,
+lord, campaign setup with difficulty lists), confirmed Start Campaign, and
+campaign-map reading (HUD, provinces, settlements, building and recruiting,
+End Turn) have passed live testing on this PC. Moving armies and battles are
+not supported yet; battles are planned as auto resolve.
 
-**Current development candidate: 0.6.31.** Adds opt-in HUD readiness checks,
-native getter type diagnostics and a read-only capture refresh channel. All 402
-Lua scenarios and package/client checks pass; live campaign verification remains
-pending. The owner requested a stopping point. 0.6.28 remains installed and all
-test processes/flags are closed. See the [candidate checkpoint](docs/CAMPAIGN_DISCOVERY_0_6_31.md).
-It is not an accepted campaign HUD reader. Physical-key and full audible
-completion acceptance remain separate from native handler/API results.
+The game-side Lua script writes speech requests to a bridge file; the Windows
+companion (PowerShell and C#) forwards them to NVDA and passes the menu keys
+back to the game. See [the latest trial notes](docs/TRIAL_3_0_6_64.md) and
+[CLAUDE.md](CLAUDE.md) for the current state and how to build and test.
 
-The older **0.2.5-dev** source includes control-identity checks, UI lifecycle invalidation, foreground-scoped hotkeys, and speech-batch preservation. It is not a verified playable release.
-
-Build artifacts are excluded from Git. Build locally with `bash tools/build-pilot.sh --diagnostic` and `python3 tools/package-pilot.py --diagnostic` after setting up the project-local tools described in the documentation. The resulting ZIP contains the installer, companion, and licensed NVDA controller runtime. Do not enable the diagnostic and another pilot/probe simultaneously.
-
-See [current progress and validation](docs/CURRENT_PROGRESS.md), [input review](docs/JAWS_INPUT_REVIEW.md), and [engine research](docs/ENGINE_RESEARCH.md).
+Build: `powershell -File tools/build-graphics-preview-windows.ps1` (runs the
+checks, packs `warhammer_access.pack`, packages the ZIP). Build artifacts are
+excluded from Git.
 
 ## Project documents
 
-- [Release and test instructions](docs/PILOT_RELEASE.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
-- [Co-op acceptance scenarios](docs/COOP_TEST_PLAN.md)
+- [Current progress history](docs/CURRENT_PROGRESS.md)
+- [Speech conventions](docs/SPEECH_CONVENTIONS_0_6_25.md) and [standard keys](docs/STANDARD_KEYS_0_6_27.md)
+- [Engine research](docs/ENGINE_RESEARCH.md)
 - [Local environment and pack inspection](docs/ENVIRONMENT.md)
 - [RPFM setup](docs/RPFM_SETUP.md)
-- [Implementation backlog](docs/IMPLEMENTATION_BACKLOG.md)
 - [Transport specification](protocol/README.md)
 
-Sources: `mod/` (Lua), `companion/` (Windows PowerShell and C#), `packaging/pilot/` (installer), `tests/`, and `tools/`. Proprietary game extracts and downloaded tools remain under ignored `local/`; release packages remain under ignored `artifacts/`.
+Sources: `diagnostics/` (game-side Lua: `graphics_preview.lua` is the runtime,
+`campaign_readonly.lua` the campaign reader), `companion/` (Windows PowerShell
+and C#), `packaging/pilot/` (installer), `tests/`, and `tools/`. Proprietary
+game extracts and downloaded tools stay under ignored `local/`; release
+packages under ignored `artifacts/`.

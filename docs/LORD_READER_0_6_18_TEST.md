@@ -43,7 +43,7 @@ used by the proven 0.6.14 code and were not implicated.
 | --- | --- |
 | Offline | 339 scenarios, speech trace, PS 5.1 atomic writes, pack round-trip, installer/tamper/uninstall/preservation |
 | Install | 0.6.18 manifest and pack hash verified; backup `work/preinstall-0.6.18-0d3435a9` |
-| Launch | Direct: `Warhammer2.exe` with TWMM `used_mods.txt` (only `jaws_access.pack`) and `-dx11`, owner-approved; main menu visually confirmed, no intro video on screen |
+| Launch | Direct: `Warhammer2.exe` with TWMM `used_mods.txt` (only `warhammer_access.pack`) and `-dx11`, owner-approved; main menu visually confirmed, no intro video on screen |
 | Route | New Campaign → Select Campaign (17) → Continue → Select Lord (Tyrion, High Elves, Eataine) visually confirmed |
 | Reader | All 34 entries, labels match the expected catalog, including `Race attribute:` ×3, faction/lord effects, difficulties |
 | Paging | Next fetched discovery pages itself (pages 1–5, 205 nodes, complete, 0 errors/limits) |

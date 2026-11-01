@@ -4,7 +4,7 @@ param(
     [switch]$DoubleConfirm,
     [ValidateRange(1,1800)][int]$LeaseSeconds = 900,
     [ValidateRange(250,15000)][int]$TimeoutMs = 5000,
-    [string]$BasePath = (Join-Path $env:LOCALAPPDATA 'JawsWarhammer2')
+    [string]$BasePath = (Join-Path $env:LOCALAPPDATA 'WarhammerAccess')
 )
 $ErrorActionPreference = 'Stop'
 $encoding = New-Object Text.UTF8Encoding($false,$true)

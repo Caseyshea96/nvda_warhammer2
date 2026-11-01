@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # PowerShell 5.1 leaves $PSScriptRoot empty inside param defaults.
 if (-not $Catalog) { $Catalog = Join-Path $PSScriptRoot '..\..\tests\fixtures\lord_expected_catalog.json' }
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $helper = Join-Path $base 'App\Automation.ps1'
 $full = "$Version-nvda-automation-preview"
 # PowerShell 5.1 emits a JSON array as one object; unroll it explicitly.

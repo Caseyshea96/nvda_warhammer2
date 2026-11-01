@@ -68,7 +68,7 @@ graceful shutdowns.
 
 Not verified: physical key presses on the owner's/friend's keyboard (injected
 presses were used), Escape after the companion's keys (injected Escape never
-reaches the game), audible completion, JAWS.
+reaches the game), audible completion.
 
 Evidence: `work/live-0.6.26-keys` (keys.tsv, speech), `work/live-0.6.27-keys`,
 `work/live-0.6.27-regression`. Package `outputs/warhammer2-windows-0.6.27-nvda-automation-preview.zip`.

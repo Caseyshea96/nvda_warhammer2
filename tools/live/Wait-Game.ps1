@@ -2,7 +2,7 @@
 # record the owned game process.
 param([Parameter(Mandatory=$true)][string]$Evidence, [int]$TimeoutSeconds = 240)
 $ErrorActionPreference = 'Stop'
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $until = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
 $game = $null
 while (-not $game -and [datetime]::UtcNow -lt $until) {

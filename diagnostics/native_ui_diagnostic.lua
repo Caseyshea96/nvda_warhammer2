@@ -51,14 +51,14 @@ local function speak(text)
         .. ',"sequence":' .. sequence .. ',"context":"frontend","generation":0,"kind":"speech","text":' .. quote(text) .. '}') end
 end
 local bases = {}
-if os.getenv and os.getenv('LOCALAPPDATA') then bases[1] = os.getenv('LOCALAPPDATA') .. '/JawsWarhammer2/' end
+if os.getenv and os.getenv('LOCALAPPDATA') then bases[1] = os.getenv('LOCALAPPDATA') .. '/WarhammerAccess/' end
 bases[#bases + 1] = ''
 for _, base in ipairs(bases) do
     local path = base .. 'native-ui-diagnostic.log'
     local f = io.open(path, 'w')
     if f then
         f:write('WH2 native UI diagnostic 0.4.3-nvda-diagnostic\n'); f:close()
-        log_path = path; bridge_path = base .. (base == '' and 'jaws_access.jsonl' or 'bridge.jsonl')
+        log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
         break
     end
@@ -207,7 +207,7 @@ end
 if not core:is_campaign() and not core:is_battle() then
     core:add_ui_created_callback(function() log('lifecycle.created', true) end)
     core:add_ui_destroyed_callback(function() log('lifecycle.destroyed', true) end)
-    core:add_listener('jaws_diagnostic_key', 'ShortcutTriggered',
+    core:add_listener('warhammer_diagnostic_key', 'ShortcutTriggered',
         function(c) return c.string == 'script_F2' or c.string == 'script_F3' end,
         function(c)
             if runs == 0 then capture('shortcut') end

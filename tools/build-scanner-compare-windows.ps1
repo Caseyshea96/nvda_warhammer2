@@ -20,21 +20,21 @@ try {
     if ($LASTEXITCODE) { throw 'Speech trace tests failed' }
     $stage = Join-Path $root ('artifacts/scanner-compare-build-' + [guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($stage)
-    $pack = Join-Path $stage 'jaws_access.pack'
+    $pack = Join-Path $stage 'warhammer_access.pack'
     & $rpfm --game warhammer_2 pack create -p $pack
     if ($LASTEXITCODE) { throw 'Pack creation failed' }
     & $rpfm --game warhammer_2 pack set-file-type -p $pack -f mod
     if ($LASTEXITCODE) { throw 'Pack type failed' }
-    & $rpfm --game warhammer_2 pack add -p $pack -f ($source + ';script/_lib/mod/jaws_access.lua')
+    & $rpfm --game warhammer_2 pack add -p $pack -f ($source + ';script/_lib/mod/warhammer_access.lua')
     if ($LASTEXITCODE) { throw 'Pack insertion failed' }
     $roundtrip = Join-Path $stage 'roundtrip'
     & $rpfm --game warhammer_2 pack extract -p $pack -F ('/;' + $roundtrip)
     if ($LASTEXITCODE) { throw 'Pack extraction failed' }
-    $extracted = Join-Path $roundtrip 'script/_lib/mod/jaws_access.lua'
+    $extracted = Join-Path $roundtrip 'script/_lib/mod/warhammer_access.lua'
     if ((Get-FileHash $source).Hash -ne (Get-FileHash $extracted).Hash) { throw 'Roundtrip differs from source' }
-    $output = Join-Path $root 'artifacts/jaws_access_scanner_compare.pack'
+    $output = Join-Path $root 'artifacts/warhammer_access_scanner_compare.pack'
     Copy-Item -LiteralPath $pack -Destination $output -Force
-    ((Get-FileHash $output).Hash.ToLowerInvariant() + '  jaws_access_scanner_compare.pack') | Set-Content ($output + '.sha256') -Encoding Ascii
+    ((Get-FileHash $output).Hash.ToLowerInvariant() + '  warhammer_access_scanner_compare.pack') | Set-Content ($output + '.sha256') -Encoding Ascii
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/package-nvda-addon.ps1
     if ($LASTEXITCODE) { throw 'Add-on packaging failed' }
     & $Python tools/package-pilot.py --scanner-compare

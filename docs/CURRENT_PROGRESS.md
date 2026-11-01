@@ -95,16 +95,16 @@ notes below describe historical checkpoints and may mention superseded installs.
 ## Implemented
 
 - Keyboard-only, read-only native UI diagnostic with a one-shot bounded visible-tree capture, raw return types and per-method errors; frontend-only logging preserves evidence across campaign/battle loading.
-- Windows speech companion with JAWS COM and official NVDA Controller Client backends, plus installer/removal scripts.
+- Windows speech companion with the official NVDA Controller Client backend, plus installer/removal scripts.
 - Development control identity validation, UI readiness gates and lifecycle invalidation.
-- Companion hotkeys registered while the game is foreground, with focus checks at dispatch and tested registration/release behavior. Focus detection polls every 100 ms; in-game JAWS conflicts remain unverified.
+- Companion hotkeys registered while the game is foreground, with focus checks at dispatch and tested registration/release behavior. Focus detection polls every 100 ms.
 - Bounded speech batches preserve errors/results and collapse consecutive focus messages. Speech completion across polls and simultaneous-source arbitration remain outstanding.
 
 ## Validation
 
 Lua fixture tests cover native-like opaque identities, replaced controls, missing identities, lifecycle, turn checks and visibility filtering. Separate diagnostic fixtures check bounded captures and malformed returns. PowerShell tests cover transport, protocol, speech batches and hotkey policy. C# compilation targets .NET Framework 4.8 and C#5. Pack builds round-trip through RPFM. Installer fixtures run against temporary Steam-like paths with spaces and cover reruns, tampering and removal/preservation.
 
-These checks are local simulations and packaging checks. Both JAWS and NVDA read-only frontend browsing have run successfully in the game. Quiet-mode effectiveness, broader activation, battle and co-op paths still need runtime testing.
+These checks are local simulations and packaging checks. NVDA read-only frontend browsing has run successfully in the game. Quiet-mode effectiveness, broader activation, battle and co-op paths still need runtime testing.
 
 ## Required next evidence
 
@@ -508,7 +508,7 @@ Do not attribute the regression to protected calls or tail calls as established
 fact. The supplied native-ui-diagnostic.log is still from the 0.4.3 run.
 
 0.5.3-nvda-scanner-compare is a separate read-only investigation build. Its
-baseline capture_tree is checked for exact equality with diagnostics/jaws_access.lua.
+baseline capture_tree is checked for exact equality with diagnostics/native_ui_diagnostic.lua.
 After baseline traversal it compares the 0.5.2 reader on the same root and first
 child, direct and inside an additional protected action wrapper, then repeats
 the diagnostic root sample. It writes native-ui-scanner-compare.log. F4 is unbound;
@@ -561,7 +561,7 @@ After the activation review and the user's request to continue development, a se
 
 The activation prototype now rejects failed required reads, including failures shared by both the browse and activation snapshots, requires the observed `active` state, validates ancestor visibility, and blocks activation whenever a tracked panel is open. Fixtures exercise these cases in normal Lua and the host-pcall variant. Frontend modal events have not been established by a live capture; campaign-named mock events do not prove frontend coverage. Do not test activation with an open modal. `tools/build-interactive-windows.ps1 -Python <python.exe>` builds and roundtrip-verifies the pack, then packages it. Windows installer fixtures passed against the ZIP, covering tampering, repeat installation, rollback, and preservation of unrelated files.
 
-2026-10-26 live 0.4.3 result: the diagnostic and quiet-mode add-on were installed, NVDA restarted, and the game loaded with only jaws_access enabled. The new capture completed 86 nodes and 22 controls; bridge records show full names and forward/reverse navigation. The tester heard diagnostic speech but reports each control utterance stops after “Controls.” This does not pass speech usability. Three startup watchdog recoveries were observed; the ten-minute menu stability test was not completed because Computer Use was stopped with Escape. Do not infer that quiet mode fixes the freezes or that controller API acceptance proves audible completion.
+2026-10-26 live 0.4.3 result: the diagnostic and quiet-mode add-on were installed, NVDA restarted, and the game loaded with only warhammer_access enabled. The new capture completed 86 nodes and 22 controls; bridge records show full names and forward/reverse navigation. The tester heard diagnostic speech but reports each control utterance stops after “Controls.” This does not pass speech usability. Three startup watchdog recoveries were observed; the ten-minute menu stability test was not completed because Computer Use was stopped with Escape. Do not infer that quiet mode fixes the freezes or that controller API acceptance proves audible completion.
 
 An unreleased companion `-TraceSpeech` option now records UTC timestamps, process/request IDs, full requested text, NVDA return codes, and explicit companion stop requests in bounded local `speech-trace.jsonl` files. It is off by default, has fixture coverage, and is not installed in the 0.4.3 package. A zero return code records API acceptance only, not spoken completion. Use this to distinguish rapid replacement requests from an interruption outside the companion if the single-tap test still truncates speech. The tester's single-tap-and-wait result is pending.
 
@@ -571,11 +571,11 @@ The first 0.3.0 Windows capture proved that the root is valid: Id and ChildCount
 
 The 0.3.1 run established successful root-child conversion for `layout`, `watermark_square`, `main`, `sp_frame`, and hidden `browser`; all read methods returned consistent types and opaque addresses. Its hover event identified only the broad `main` container and the user rejected mouse-dependent testing.
 
-The 0.3.2 keyboard-only run completed all 86 visible-tree nodes without error. It identified labeled wrappers for New, Continue, Load and Multiplayer Campaign; battle modes; graphics, sound, controls, game settings, brightness, credits and support; plus Total War Academy, Patch Notes and Quit. The JAWS transcript confirms startup speech and the one-shot F2 capture. No further mouse/event-component evidence is required.
+The 0.3.2 keyboard-only run completed all 86 visible-tree nodes without error. It identified labeled wrappers for New, Continue, Load and Multiplayer Campaign; battle modes; graphics, sound, controls, game settings, brightness, credits and support; plus Total War Academy, Patch Notes and Quit. The screen-reader transcript confirms startup speech and the one-shot F2 capture. No further mouse/event-component evidence is required.
 
 The 0.3.3 diagnostic stopped immediately after reading the root ChildCount, before its first child lookup. The 0.3.4 diagnostic moves classification after child traversal, isolates it behind its own protected call, and uses the exact control IDs established by the successful 0.3.2 capture. On its first F2 it performs the bounded tree capture and speaks the first known button; subsequent F2/F3 presses browse next/previous controls. It has no F4 handler, mouse dependency, activation, or game-command path. Diagnostic mode does not load the native mouse/hotkey assembly.
 
-The 0.3.4 Windows result completed all 86 visible nodes, classified 22 controls, logged `capture.COMPLETE`, and spoke New Campaign, Continue Campaign, Load Campaign, Multiplayer Campaign, and Movie Viewer in order. No capture or classification error appeared. This validates the game-side read-only traversal and classification path. The JAWS transcript also announced “left mouse button” twice, but the diagnostic contains no mouse action path and its launcher does not load the pointer/hotkey assembly, so that phrase cannot be attributed to a diagnostic mouse action.
+The 0.3.4 Windows result completed all 86 visible nodes, classified 22 controls, logged `capture.COMPLETE`, and spoke New Campaign, Continue Campaign, Load Campaign, Multiplayer Campaign, and Movie Viewer in order. No capture or classification error appeared. This validates the game-side read-only traversal and classification path. The screen-reader transcript also announced “left mouse button” twice, but the diagnostic contains no mouse action path and its launcher does not load the pointer/hotkey assembly, so that phrase cannot be attributed to a diagnostic mouse action.
 
 The 0.4.2 NVDA test passed end to end: the game captured 86 visible nodes and 22 controls without errors; bridge sequences were consecutive; the tester confirmed NVDA spoke all 22 controls and reverse wraparound worked. NVDA's log nevertheless recorded recurring sub-second watchdog recoveries and UI Automation errors also seen before the diagnostic was installed.
 
@@ -587,4 +587,4 @@ The development navigator removes the failing `math.*` bounds, derives labels fr
 
 The diagnostic package is not playable. 0.2.5-dev is a development build, not a verified replacement. Prior pcall/tail-call explanations remain hypotheses. See ENGINE_RESEARCH.md for the decision table.
 
-Proprietary game extracts, JAWS installers, downloaded developer tools, local captures and ZIP/pack artifacts are intentionally not committed. No license is assigned to third-party material.
+Proprietary game extracts, screen-reader installers, downloaded developer tools, local captures and ZIP/pack artifacts are intentionally not committed. No license is assigned to third-party material.

@@ -2,7 +2,7 @@
 # -Name, then press Enter (-Times, for confirmations). Prints what was spoken.
 param([Parameter(Mandatory=$true)][string]$Letter, [Parameter(Mandatory=$true)][string]$Name,
     [int]$Times = 1, [int]$WaitMs = 6000, [int]$Tries = 10)
-$bridge = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2\bridge.jsonl'
+$bridge = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\bridge.jsonl'
 $keys = Join-Path $PSScriptRoot 'Send-Keys.ps1'
 function Last { (Get-Content $bridge -Encoding UTF8 -Tail 1 | ConvertFrom-Json).text }
 $start = (Get-Content $bridge).Count

@@ -8,13 +8,13 @@ After Steam finishes, inspect `~/.local/share/Steam/steamapps/common/Total War W
 
 Choose and pin an RPFM release supporting WH2, inspect its actual command-line interface, and extract only relevant scripts into ignored `local/`. Inspect campaign, frontend, and battle mod-loading paths; UI events; keyboard shortcuts; output logging; file I/O; and timers. Record exact source paths and observations. Never edit vanilla packs to deploy this mod.
 
-Prepare a Lua 5.1-compatible syntax check and a C# toolchain. Keep the protocol/parser and console output backend runnable on Linux; place JAWS COM and Windows input behind platform-specific adapters. Select the target framework after confirming the friend's Windows version. Test COM process architecture instead of inferring it from the game or installer filename.
+Prepare a Lua 5.1-compatible syntax check and a C# toolchain. Keep the protocol/parser and console output backend runnable on Linux; place screen-reader speech and Windows input behind platform-specific adapters. Select the target framework after confirming the friend's Windows version. Test COM process architecture instead of inferring it from the game or installer filename.
 
 Deliverable: environment notes, verified entry paths, and a repeatable pack-building command. No guessed loader paths should ship.
 
 ## 2. Speech and transport probes, independent of game installation
 
-Implement a companion console mode that reads sample records and prints what it would speak. Test partial records, Unicode, invalid messages, duplicate sequences, and stream restart. Then add a Windows COM probe that speaks a fixed sentence, interrupts it, and stops speech. Test JAWS missing, closed, and restarted, plus the game in focus.
+Implement a companion console mode that reads sample records and prints what it would speak. Test partial records, Unicode, invalid messages, duplicate sequences, and stream restart. Then add a Windows COM probe that speaks a fixed sentence, interrupts it, and stops speech. Test the screen reader missing, closed, and restarted, plus the game in focus.
 
 Deliverable: a Windows speech diagnostic and a Linux-testable message reader. These prove infrastructure only, not game accessibility.
 
@@ -38,7 +38,7 @@ Probe game keyboard events before adding a return channel. If a helper command f
 
 Develop both in single-player, then test each in the actual co-op campaign immediately. A working tutorial/custom battle is insufficient evidence for campaign battles.
 
-Deliverable: one usable campaign interaction and one usable battle interaction verified by the friend with JAWS.
+Deliverable: one usable campaign interaction and one usable battle interaction verified by the friend with NVDA.
 
 ## 5. Co-op acceptance and expansion
 
@@ -54,4 +54,4 @@ Expand toward a complete co-op session: lobby navigation, turn announcements, se
 - Local speech enablement: companion-local configuration; identical game packs for both players initially.
 - Campaign/faction test fixture: choose content both players own; avoid introducing DLC dependencies just for testing.
 - Initial transport mode: whichever co-op mode works in the unmodded baseline. LAN/server independence is a separate test, not a prerequisite for speech development.
-- Friend's Windows/JAWS version, test availability, key preferences, and braille requirements: still to establish.
+- Friend's Windows/NVDA version, test availability, key preferences, and braille requirements: still to establish.

@@ -2,7 +2,7 @@
 # endpoint is ready plus a margin, to see whether startup movies play.
 param([Parameter(Mandatory=$true)][string]$Evidence, [int]$IntervalSeconds = 3, [int]$AfterReadySeconds = 12, [int]$TimeoutSeconds = 240)
 $ErrorActionPreference = 'Stop'
-$status = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2\automation-status.tsv'
+$status = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\automation-status.tsv'
 $start = Get-Date; $ready = $null; $n = 0
 while (((Get-Date) - $start).TotalSeconds -lt $TimeoutSeconds) {
     $game = Get-CimInstance Win32_Process -Filter "Name='Warhammer2.exe'"

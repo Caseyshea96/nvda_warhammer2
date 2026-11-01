@@ -71,7 +71,7 @@ if not wanted then
 end
 local records=assert(runs[wanted],'no such run')
 
-local prefix=(os.getenv('LOCALAPPDATA') or '') .. '/JawsWarhammer2/'
+local prefix=(os.getenv('LOCALAPPDATA') or '') .. '/WarhammerAccess/'
 local files,listeners,pending={}, {}, false
 local nodes={}
 local function node(path)

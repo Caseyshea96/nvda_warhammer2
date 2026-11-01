@@ -2,7 +2,7 @@ local saved_io,saved_date=io,os.date
 local scenarios=0
 local watchdog_pending
 local nodes,files,listeners,pending,ui_ready,destroyed,dispatches,clock,clicked
-local prefix=(os.getenv('LOCALAPPDATA') or '') .. '/JawsWarhammer2/'
+local prefix=(os.getenv('LOCALAPPDATA') or '') .. '/WarhammerAccess/'
 local owner=string.rep('a',32)
 local valid='WH2CAM1\t' .. owner .. '\t2026-10-29T18:30:00Z\tverify\n'
 local timer='warhammer_campaign_readonly_tick'

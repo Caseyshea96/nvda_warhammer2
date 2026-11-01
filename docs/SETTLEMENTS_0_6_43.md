@@ -203,7 +203,7 @@ Findings:
 - Not the log budget, not a Lua error (none logged), not window focus (focusing
   or clicking the game did not resume it).
 - With the campaign reader switched off (test-only `campaign-reader-off.flag`
-  in %LOCALAPPDATA%\JawsWarhammer2), 4 of 4 campaign starts finished the
+  in %LOCALAPPDATA%\WarhammerAccess), 4 of 4 campaign starts finished the
   flyover (`work/flyover-compare/off-1..4`). With the reader on, about 2 of 18
   earlier starts froze. Suggestive, not conclusive on its own.
 - The reader re-registered its next single-shot `real_timer` from inside the

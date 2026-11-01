@@ -51,8 +51,8 @@ Decision table:
 | inline root reads good, wrapper bad | Isolate wrapper argument/return shape |
 | inline and wrapped root bad, event component good | Cached root and root lifetime/context |
 | root good, Find/conversion bad | Child address conversion and mutation during traversal |
-| all native objects bad | Runtime/build/mod conflicts and binding context; no JAWS setting changes |
+| all native objects bad | Runtime/build/mod conflicts and binding context; no screen-reader setting changes |
 | reads good, labels empty | Menu-specific hierarchy/label adapters, not transport |
-| records complete but speech incomplete | Companion coalescing/JAWS interruption |
+| records complete but speech incomplete | Companion coalescing/screen-reader interruption |
 
 Acceptance before expanding again: actual main-menu item names, expected types and positive child counts, followed by a separately authorized harmless menu/submenu/back test. Passing mock tests alone does not satisfy this gate.

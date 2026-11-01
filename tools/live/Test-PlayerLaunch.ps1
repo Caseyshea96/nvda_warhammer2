@@ -5,7 +5,7 @@ param([Parameter(Mandatory=$true)][string]$Evidence)
 $ErrorActionPreference = 'Stop'
 [void][IO.Directory]::CreateDirectory($Evidence)
 if (Get-Process -Name Warhammer2 -ErrorAction SilentlyContinue) { throw 'Game already running; close it first.' }
-$app = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2\App'
+$app = Join-Path $env:LOCALAPPDATA 'WarhammerAccess\App'
 $source = [IO.File]::ReadAllText((Join-Path $app 'Companion.ps1'))
 $start = $source.IndexOf('    function Launch-Game {')
 $end = $source.IndexOf("`n    }", $start)
@@ -16,7 +16,7 @@ function Speak([string]$Text, [switch]$Force) { $script:Spoken += $Text }
 function Set-Status([string]$Text) { }
 function Connect-ScreenReader { $true }
 $ScreenReader = 'Nvda'; $script:NvdaConnected = $true; $readerName = 'NVDA'
-$base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
+$base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
 $GamePath = (Get-Content -LiteralPath (Join-Path $app 'config.json') -Raw | ConvertFrom-Json).game_path
 . ([ScriptBlock]::Create($function))
 $result = Launch-Game

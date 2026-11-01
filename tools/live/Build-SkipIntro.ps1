@@ -1,4 +1,4 @@
-# Build work/skip-intro/jaws_skip_intro.pack: three empty files named like the
+# Build work/skip-intro/warhammer_skip_intro.pack: three empty files named like the
 # game's startup movies, so the game skips them. Test launches only; the game
 # folder and TW Mod Manager's profile are never touched.
 $ErrorActionPreference = 'Stop'
@@ -7,7 +7,7 @@ $rpfm = Join-Path $repo 'local\tools\rpfm-4.5.4-windows\rpfm_cli.exe'
 $dir = Join-Path $repo 'work\skip-intro'
 $src = Join-Path $dir 'src'
 [void][IO.Directory]::CreateDirectory($src)
-$pack = Join-Path $dir 'jaws_skip_intro.pack'
+$pack = Join-Path $dir 'warhammer_skip_intro.pack'
 if (Test-Path -LiteralPath $pack) { Remove-Item -LiteralPath $pack }
 & $rpfm --game warhammer_2 pack create -p $pack 2>$null
 & $rpfm --game warhammer_2 pack set-file-type -p $pack -f mod 2>$null

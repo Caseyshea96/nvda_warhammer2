@@ -12,7 +12,7 @@ Verified from local files, 2026-10-24.
 
 ## Initial input findings
 
-The installed `data/text/default_keys.xml` defines hidden script shortcuts `script_F2`, `script_F3`, `script_F4`, and Shift/Ctrl variants. Its shortcut assignments route these to the root component. This is evidence for investigating native script input before building a companion-to-game command channel; it does not yet prove event delivery or freedom from JAWS key conflicts.
+The installed `data/text/default_keys.xml` defines hidden script shortcuts `script_F2`, `script_F3`, `script_F4`, and Shift/Ctrl variants. Its shortcut assignments route these to the root component. This is evidence for investigating native script input before building a companion-to-game command channel; it does not yet prove event delivery or freedom from screen-reader key conflicts.
 
 The file also maps next/previous selection to the battle card manager and cancel-order to `button_halt`. These are candidates for normal game command routes. No key bindings have been changed.
 
@@ -32,6 +32,6 @@ RPFM successfully indexed `data.pack` and extracted its scripts under ignored `l
 
 All installed top-level `.pack` files were indexed: `lib_mod_loader.lua`, `lib_core.lua`, `events.lua`, and `all_scripted.lua` were found only in `data.pack`. The audit result is stored locally in `local/inspection/loader-pack-locations.json`. This resolves overrides for these four files, not every campaign script.
 
-A read-only probe is now built and copied to `data/jaws_probe.pack`. Its only packed file is `script/_lib/mod/jaws_probe.lua`. Lua 5.1.5 syntax checks, engine-mock tests, and RPFM pack round-trip checks passed. In-game tests are pending; see [the procedure](PROBE_TEST.md).
+A read-only probe pack (since removed) was built and copied to `data/`, holding one script. Lua 5.1.5 syntax checks, engine-mock tests, and RPFM pack round-trip checks passed. In-game tests are pending; see [the procedure](PROBE_TEST.md).
 
-No vanilla packs or Steam settings were modified. The only deployment change is the new diagnostic `data/jaws_probe.pack`; it has not been enabled by the agent.
+No vanilla packs or Steam settings were modified. The only deployment change was that diagnostic probe pack; it was not enabled by the agent.
