@@ -201,7 +201,7 @@ try {
         Write-Host "Installed: $app"
         Write-Host 'Start NVDA and Steam, then run the desktop shortcut (or Start Pilot.cmd). It tests NVDA and starts the game with the accessibility mod; no Mod Manager is needed.'
         Write-Host 'Before testing, install warhammer2-quiet-mode-0.1.0.nvda-addon from the App folder and restart NVDA.'
-        Write-Host 'To update later: save the new ZIP in Downloads or on the Desktop and run the Warhammer NVDA Update shortcut.'
+        Write-Host 'To update later, run the Warhammer NVDA Update shortcut: it downloads the newest version from GitHub.'
         Write-Host 'If Steam is not running, the game opens through Steam: tick warhammer_access in the Mod Manager and press Play.'
         Write-Host 'This is an experimental prototype; please report what works and what does not.'
     } finally { $lock.Dispose(); if ($oldLock) { $oldLock.Dispose() } }

@@ -144,3 +144,29 @@ helper gone; no-argument run found an old 0.6.63 ZIP on the Desktop and said
 nothing to update (`work/live-0.6.68-update`). Installer checks cover the
 update (no ZIP, already current, older install updated) and closing a real
 running helper.
+
+## 0.6.69 — updates from GitHub (November 1, 2026)
+
+Owner request: "have it pull the latest update from GitHub". The repo
+(`Caseyshea96/jaws_warhammer2`) is public, so no sign-in is needed.
+- `Update.ps1` ("Warhammer NVDA Update" shortcut) first asks the GitHub API
+  for the latest release (`/repos/<repo>/releases/latest`). It takes the
+  highest `warhammer2-windows-<version>-nvda-automation-preview.zip` asset;
+  if newer than the installed version it downloads it and its `.sha256`
+  asset (saved to a file: GitHub serves it as binary), refuses on a missing
+  or mismatched checksum, then unpacks and runs the installer as before.
+  Messages: "Checking GitHub for the newest version.", "Downloading version
+  X.", "Version A is installed; the newest release is B. Nothing to update.",
+  "No release on GitHub yet; …" (404), "Could not reach GitHub; looking in
+  Downloads and on the Desktop instead." (then the saved-ZIP route).
+  `-Offline` skips GitHub. TLS 1.2 is switched on for Windows PowerShell 5.1.
+- `tools/Publish-Release.ps1 -Version X -Notes "..."` creates release `vX`
+  with the ZIP and `.sha256`, after checking: they exist and match, X is the
+  source version, HEAD is pushed, the tag is new. Publishing is public, so it
+  runs only when the owner wants that version out.
+- Installer checks: a local stand-in for the GitHub API covers up to date,
+  a wrong checksum (nothing installed), a newer release installed, no
+  release yet (404, saved ZIP used) and GitHub unreachable (saved ZIP used).
+- The checksum guards against a broken download, not against someone who can
+  publish releases on the repo: anyone with write access to it can ship code
+  to players.

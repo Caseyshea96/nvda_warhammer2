@@ -12,7 +12,7 @@ $expires=[datetime]::UtcNow.AddMinutes(10).ToString('yyyy-MM-ddTHH:mm:ssZ')
 $flag=Join-Path $fixture 'campaign-discovery.tsv'
 $statusPath=Join-Path $fixture 'campaign-discovery-status.json'
 $requestPath=Join-Path $fixture 'campaign-discovery-request.tsv'
-$state=[pscustomobject]@{protocol='WH2CAMSTATUS1';version='0.6.68';owner=$owner;session=('campaign:'+$owner+':fixture');generation=2;phase='ready';request='';result='capture-complete';attempts=1;run=1;count=4;index=1;errors=0;complete=$true;expires=$expires;selected_key='campaign:tree.child0:text';label='Fixture HUD'}
+$state=[pscustomobject]@{protocol='WH2CAMSTATUS1';version='0.6.69';owner=$owner;session=('campaign:'+$owner+':fixture');generation=2;phase='ready';request='';result='capture-complete';attempts=1;run=1;count=4;index=1;errors=0;complete=$true;expires=$expires;selected_key='campaign:tree.child0:text';label='Fixture HUD'}
 function Save-State { [IO.File]::WriteAllText($statusPath,($state | ConvertTo-Json -Compress)+"`n",$enc) }
 function Invoke-Client([string]$Action,[int]$Timeout=1500) {
     $previous=$ErrorActionPreference;$ErrorActionPreference='Continue'

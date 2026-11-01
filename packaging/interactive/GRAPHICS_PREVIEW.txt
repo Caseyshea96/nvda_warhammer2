@@ -10,13 +10,16 @@ Items are spoken the way NVDA reads any program: name, role, value, states,
 then position, for example "Recruit Lord, button, 53 of 106".
 
 ------------------------------------------------------------------------
-UPDATE TO A NEW VERSION (once 0.6.68 or later is installed)
-1. Close the game. Save the new ZIP in Downloads or on the Desktop (do not
-   extract it).
-2. Run the desktop shortcut "Warhammer NVDA Update". It finds the newest
-   ZIP, closes the helper if it is running, installs it and says "Upgraded
-   from version ... to ...". Press a key to close the window, then start
-   the game with "Warhammer NVDA Pilot" as usual.
+UPDATE TO A NEW VERSION (once 0.6.69 or later is installed)
+1. Close the game.
+2. Run the desktop shortcut "Warhammer NVDA Update". It checks GitHub for the
+   newest version ("Checking GitHub for the newest version."), downloads it,
+   checks it, closes the helper if it is running, installs it and says
+   "Upgraded from version ... to ...". If you already have the newest it says
+   "Nothing to update." Press a key to close the window, then start the game
+   with "Warhammer NVDA Pilot" as usual.
+   Without internet it uses a new ZIP saved (not extracted) in Downloads or
+   on the Desktop instead.
 
 FIRST INSTALL (or updating from 0.6.67 or earlier)
 1. Close the game. Extract the whole ZIP to a folder.
@@ -41,7 +44,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.68 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.69 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.

@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
     downloads = folder / 'Downloads'
     downloads.mkdir()
     def update(*extra, success=True):
-        return run(app / 'Update.ps1', '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut', *extra, success=success)
+        return run(app / 'Update.ps1', '-Offline', '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut', *extra, success=success)
     missing = update(success=False)
     assert 'No update found' in missing.stdout, missing.stdout
     shutil.copy(archive_path, downloads / archive_path.name)
@@ -195,6 +195,60 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
     assert 'Upgraded from version 0.6.59 to ' + version in updated.stdout, updated.stdout
     assert target.read_bytes() == new_pack and companion.read_bytes() == new_companion
     assert (app / 'Update.ps1').exists() and (app / 'Update.cmd').exists()
+    # Update from the latest GitHub release (a local stand-in for the API):
+    # download, checksum check, install; falls back to a saved ZIP offline.
+    import http.server, threading
+    zip_bytes = archive_path.read_bytes()
+    published = {'zip': zip_bytes, 'sha': (hashlib.sha256(zip_bytes).hexdigest() + '  ' + archive_path.name + '\n').encode(), 'release': True}
+    class FakeGitHub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            port = self.server.server_address[1]
+            if self.path == '/repos/test/mod/releases/latest':
+                if not published['release']:
+                    self.send_response(404); self.end_headers(); return
+                body = json.dumps({'tag_name': 'v' + manifest['version'].split('-')[0], 'assets': [
+                    {'name': archive_path.name, 'browser_download_url': f'http://127.0.0.1:{port}/dl/zip'},
+                    {'name': archive_path.name + '.sha256', 'browser_download_url': f'http://127.0.0.1:{port}/dl/sha'},
+                    {'name': 'notes.txt', 'browser_download_url': f'http://127.0.0.1:{port}/dl/none'}]}).encode()
+            elif self.path == '/dl/zip': body = published['zip']
+            elif self.path == '/dl/sha': body = published['sha']
+            else:
+                self.send_response(404); self.end_headers(); return
+            self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), FakeGitHub)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    api = f'http://127.0.0.1:{server.server_address[1]}'
+    def online(*extra, success=True, api_base=None):
+        return run(app / 'Update.ps1', '-ApiBase', api_base or api, '-Repository', 'test/mod', '-Folder', str(folder / 'empty'),
+                   '-GamePath', str(game), '-NoShortcut', *extra, success=success)
+    (folder / 'empty').mkdir()
+    try:
+        current = online()
+        assert 'Nothing to update' in current.stdout and 'newest release' in current.stdout, current.stdout
+        fake_older()
+        published['sha'] = b'0' * 64 + b'  wrong\n'
+        tampered = online(success=False)
+        assert 'does not match its checksum' in tampered.stdout and target.read_bytes() == b'older pack build', tampered.stdout
+        published['sha'] = (hashlib.sha256(zip_bytes).hexdigest() + '  ' + archive_path.name + '\n').encode()
+        pulled = online()
+        assert 'Downloading version ' + version in pulled.stdout, pulled.stdout
+        assert 'Upgraded from version 0.6.59 to ' + version in pulled.stdout, pulled.stdout
+        assert target.read_bytes() == new_pack and companion.read_bytes() == new_companion
+        # No release yet: says so, then uses a saved ZIP.
+        published['release'] = False
+        fake_older()
+        none_yet = run(app / 'Update.ps1', '-ApiBase', api, '-Repository', 'test/mod', '-Folder', str(downloads),
+                       '-GamePath', str(game), '-NoShortcut')
+        assert 'No release on GitHub yet' in none_yet.stdout and 'Upgraded from version 0.6.59' in none_yet.stdout, none_yet.stdout
+    finally:
+        server.shutdown()
+    # GitHub unreachable: falls back to a saved ZIP.
+    fake_older()
+    offline = run(app / 'Update.ps1', '-ApiBase', api, '-Repository', 'test/mod', '-Folder', str(downloads),
+                  '-GamePath', str(game), '-NoShortcut')
+    assert 'Could not reach GitHub' in offline.stdout and 'Upgraded from version 0.6.59' in offline.stdout, offline.stdout
+    assert target.read_bytes() == new_pack
     # Installing while the helper runs: the installer closes it (Windows only).
     if os.name == 'nt':
         helper = subprocess.Popen(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(app / 'Companion.ps1'), '-Console'],
@@ -231,4 +285,4 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         run(app / 'Uninstall.ps1')
         assert automation.read_bytes() == modified, 'Changed automation helper must be preserved'
         assert (game / 'save.txt').read_text() == 'preserve save'
-print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, one-step update from a downloaded ZIP, closing a running helper, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')
+print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, one-step update from the latest GitHub release (checksum checked) or a downloaded ZIP, closing a running helper, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')
