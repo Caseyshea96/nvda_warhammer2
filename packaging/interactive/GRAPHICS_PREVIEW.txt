@@ -32,7 +32,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.66 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.67 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -92,6 +92,20 @@ screen order: a panel's title, its text, then its buttons.
                       silent (keys do nothing), press Shift+F3; please
                       tell us when that happens and what you had just done.
   F2 / F3 / F4        next / previous / activate, even with HUD reading off
+  F6                  switch between your lord and his settlement: from a
+                      settlement (or nothing) to the nearest lord, from a
+                      lord to the settlement he is in (or your nearest).
+                      You hear "Tyrion, 7 units, 100 percent movement.";
+                      the army panel is then read.
+  Shift+F6            next lord
+  F7                  move the selected lord: a list of the 15 nearest
+                      settlements, those reachable this turn first:
+                      "Lothern, button, yours, this turn, 1 of 16".
+                      Enter twice moves him; you hear "Moving to Lothern."
+                      and later "Tyrion arrived at Lothern." (or where he
+                      stopped). Backspace or "Close" leaves the list.
+                      Enemy settlements are listed ("at war") but attacking
+                      is not supported yet.
 
 When a panel opens or closes you hear "Screen updated." and the reader moves
 to the new panel's title or first new item. Advisor and notification text is
@@ -124,23 +138,24 @@ THINGS TO TRY (in a new campaign)
    each candidate is one item with cost and upkeep, and says why if you
    cannot afford them. The selected lord's stats follow ("Armour, 80,
    Shielded", "Leadership, 80"). Enter on a candidate selects it; then R to
-   "Recruit, button" and Enter twice. (Moving the new army is not supported
-   yet.)
+   "Recruit, button" and Enter twice. Then F6 / Shift+F6 select it and F7
+   moves it.
 6. Your armies: press L until "Lords & Heroes, tab", Enter. Each lord is one
    item: "Tyrion, list item, Legendary Lord, 116 soldiers, faction leader,
    rank 1". Enter selects him (the camera goes to him) and reads his army:
    "Tyrion, heading", then each unit, for example "Spearmen, list item,
-   Spear Infantry, strength 30", and "Unit count, 7/20". Moving him is not
-   supported yet.
+   Spear Infantry, strength 30", and "Unit count, 7/20". F6 does the same in
+   one key; F7 moves him (see the keys above).
 7. Notifications: S reaches "Skip, button" to skip the current notification.
 8. End turn: E reaches "End turn, button". Enter twice. If it says "End turn
    is unavailable", read its description: usually advice or a notification
    needs dismissing first. Ending a turn makes the game autosave.
 
 NOT SUPPORTED YET
-Moving armies or agents, battles, diplomacy screens beyond reading, changing
-game settings, and co-op. Many panels are read but their buttons may say
-"Not supported yet." Reading order inside some panels is still rough.
+Attacking, moving heroes (agents) or fleets at sea, battles, diplomacy
+screens beyond reading, changing game settings, and co-op. Many panels are
+read but their buttons may say "Not supported yet." Reading order inside
+some panels is still rough.
 
 ------------------------------------------------------------------------
 FEEDBACK

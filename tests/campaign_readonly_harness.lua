@@ -725,5 +725,210 @@ heard=contents('bridge.jsonl')
 for _,unwanted in ipairs({'Txt, button','"text":"Recruit, %d','Growth:','Left%-click to open Help pages','"text":"80,','"text":"36,'}) do
     assert(not heard:find(unwanted),'Not read separately: ' .. unwanted)
 end
+-- 0.6.67: F6 switches between a lord and his settlement through the game's own
+-- lists, Shift+F6 cycles lords, F7 lists places to move to; a confirmed move is
+-- the game's own move order. Enemies are listed but not attacked.
+do
+    local make=start('campaign',nil,3)
+    nodes['tree.child0'].count=5
+    make('tree.child0.child3','radar_things',1)
+    make('tree.child0.child3.child0','dropdown_parent',2)
+    make('tree.child0.child3.child0.child0','units_dropdown',1)
+    local units_panel=make('tree.child0.child3.child0.child0.child0','panel',1,'',false)
+    make('tree.child0.child3.child0.child0.child0.child0','list_box',2)
+    make('tree.child0.child3.child0.child0.child0.child0.child0','character_row_0',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child0','indent_parent',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child0.child0','dy_character_name',0,'Tyrion')
+    make('tree.child0.child3.child0.child0.child0.child0.child1','character_row_1',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child1.child0','indent_parent',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child1.child0.child0','dy_character_name',0,'Cavill')
+    make('tree.child0.child3.child0.child1','regions_dropdown',1)
+    local regions_panel=make('tree.child0.child3.child0.child1.child0','panel',1,'',false)
+    make('tree.child0.child3.child0.child1.child0.child0','list_box',2)
+    make('tree.child0.child3.child0.child1.child0.child0.child0','row_entry_prov_eataine',0)
+    make('tree.child0.child3.child0.child1.child0.child0.child1','row_entry_prov_tiranoc',0)
+    make('tree.child0.child4','bar_small_top',1)
+    make('tree.child0.child4.child0','tabs',2)
+    local tab_units=make('tree.child0.child4.child0.child0','tab_units',0)
+    local tab_regions=make('tree.child0.child4.child0.child1','tab_regions',0)
+    function tab_units:SimulateLClick() dispatches=dispatches+1; clicked=self.path; units_panel.visible=true; regions_panel.visible=false end
+    function tab_regions:SimulateLClick() dispatches=dispatches+1; clicked=self.path; regions_panel.visible=true; units_panel.visible=false end
+    local function list(items) return {num_items=function() return #items end,item_at=function(_,i) return items[i+1] end} end
+    local names={names_tyrion='Tyrion',names_cavill='Cavill',regions_onscreen_lothern='Lothern',regions_onscreen_tor_elasor='Tor Elasor',
+        regions_onscreen_vauls_anvil="Vaul's Anvil",regions_onscreen_far='Far Away',provinces_onscreen_prov_eataine='Eataine',
+        provinces_onscreen_prov_tiranoc='Tiranoc',factions_screen_name_def='Har Ganeth',factions_screen_name_neutral='Ellyrion'}
+    effect={get_localised_string=function(key) return names[key] or '' end}
+    local hef,def,neutral={},{},{}
+    function hef:name() return 'hef' end; function def:name() return 'def' end; function neutral:name() return 'neutral' end
+    local function region(key,province,owner,x,y)
+        local settlement={x=x,y=y}
+        function settlement:logical_position_x() return self.x end; function settlement:logical_position_y() return self.y end
+        return {name=function() return key end,province_name=function() return province end,settlement=function() return settlement end,
+            is_abandoned=function() return false end,owning_faction=function() return owner end,s=settlement}
+    end
+    local lothern=region('lothern','prov_eataine',hef,100,100)
+    local tor=region('tor_elasor','prov_tiranoc',hef,110,100)
+    local vaul=region('vauls_anvil','prov_tiranoc',def,100,112)
+    local far=region('far','prov_far',neutral,200,200)
+    local reach={[tor.s]=true,[vaul.s]=true}
+    local function lord(cqi,key,x,y,leader)
+        local char={x=x,y=y,ap=100,region_now=lothern}
+        function char:cqi() return cqi end; function char:get_forename() return key end; function char:get_surname() return '' end
+        function char:character_type(t) return t=='general' end; function char:has_military_force() return true end
+        function char:military_force() return {is_armed_citizenry=function() return false end,unit_list=function() return list({1,2,3,4,5,6,7}) end} end
+        function char:logical_position_x() return self.x end; function char:logical_position_y() return self.y end
+        function char:action_points_remaining_percent() return self.ap end
+        function char:in_settlement() return self.x==100 and self.y==100 end
+        function char:has_region() return true end; function char:region() return self.region_now end
+        return char
+    end
+    local tyrion,cavill=lord(5,'names_tyrion',100,100),lord(9,'names_cavill',130,100)
+    function hef:character_list() return list({cavill,tyrion}) end
+    function hef:faction_leader() return tyrion end
+    function hef:region_list() return list({lothern,tor}) end
+    function hef:at_war_with(other) return other==def end
+    local orders,multiplayer={},false
+    local model={world=function() return {region_manager=function() return {region_list=function() return list({far,vaul,tor,lothern}) end} end} end,
+        character_can_reach_settlement=function(_,char,settlement) return reach[settlement]==true end}
+    cm={is_multiplayer=function() return multiplayer end,get_local_faction=function() return hef end,is_local_players_turn=function() return true end,
+        model=function() return model end,get_character_by_cqi=function(_,cqi) return cqi==5 and tyrion or cavill end,
+        move_to=function(_,lookup,x,y,queue) orders[#orders+1]={lookup,x,y,queue} end}
+    begin(); for n=1,12 do tick(1) end
+    local session=contents('reader-state.tsv'):match('^WH2READER1\t([^\t]+)\t')
+    assert(session and contents('reader-state.tsv'):find('\t1\tcampaign\n',1,true),'Player HUD reading is on')
+    local seq=0
+    local function send(...)
+        local lines={'WH2KEYS1\tcompanion\t' .. session .. '\t1'}
+        for _,action in ipairs({...}) do seq=seq+1; lines[#lines+1]=seq .. '\t' .. action end
+        files[prefix .. 'keys.tsv']=table.concat(lines,'\n') .. '\n'
+        tick(1)
+    end
+    send('noop') -- announces the companion; its backlog is skipped
+    local function said() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
+    local function heard(text) return contents('bridge.jsonl'):find('"text":"' .. text .. '"',1,true)~=nil end
+    send('moves'); assert(said()=='Select a lord first: press F6.',said())
+    local before=dispatches
+    send('lords')
+    assert(dispatches==before+2 and clicked=='tree.child0.child3.child0.child0.child0.child0.child0','Opens the Lords list, then clicks the faction leader: ' .. tostring(clicked))
+    assert(heard('Tyrion, 7 units, 100 percent movement.'),contents('bridge.jsonl'))
+    send('moves')
+    assert(heard('Move Tyrion, 100 percent movement, 2 of 3 places this turn.'),contents('bridge.jsonl'))
+    assert(said()=='Tor Elasor, button, yours, this turn, 1 of 4',said())
+    send('next'); assert(said()=="Vaul's Anvil, button, Har Ganeth, at war, this turn, 2 of 4",said())
+    send('activate'); assert(said()=='Attacking is not supported yet.' and #orders==0,said())
+    send('next'); assert(said()=='Far Away, button, Ellyrion, more than a turn, 3 of 4',said())
+    send('next'); assert(said()=='Close, button, 4 of 4',said())
+    send('back'); assert(said()=='Move list closed.' or heard('Move list closed.'),said())
+    send('moves','activate'); assert(said()=='Move Tyrion to Tor Elasor? Press Enter again to confirm.' and #orders==0,said())
+    send('activate')
+    assert(#orders==1 and orders[1][1]=='character_cqi:5' and orders[1][2]==110 and orders[1][3]==100 and orders[1][4]==true,'The game move order')
+    assert(said()=='Moving to Tor Elasor.',said())
+    assert(contents('native-ui-campaign-discovery.jsonl'):find('"kind":"move-order"',1,true))
+    tyrion.x=105; tick(1); tyrion.x=110; tyrion.region_now=tor; tyrion.ap=40; tick(3)
+    assert(heard('Tyrion arrived at Tor Elasor.'),contents('bridge.jsonl'))
+    -- From the lord to the settlement he stands in.
+    before=dispatches; send('lords')
+    assert(dispatches==before+2 and clicked=='tree.child0.child3.child0.child1.child0.child0.child1','Opens Provinces, then clicks Tiranoc: ' .. tostring(clicked))
+    assert(heard('Tor Elasor, Tiranoc.'),contents('bridge.jsonl'))
+    -- From a settlement back to the nearest lord (list already open: one click).
+    fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
+    tyrion.x,tyrion.y=150,150; units_panel.visible=true; regions_panel.visible=false
+    before=dispatches; send('lords')
+    assert(dispatches==before+1 and clicked=='tree.child0.child3.child0.child0.child0.child0.child1','Nearest lord to Lothern is Cavill: ' .. tostring(clicked))
+    send('nextlord'); assert(clicked=='tree.child0.child3.child0.child0.child0.child0.child0','Shift+F6 goes to the next lord')
+    -- A lord missing from the list, a stray move order and multiplayer.
+    names.names_tyrion='Somebody'; send('nextlord'); send('nextlord')
+    assert(heard('Could not find Somebody in the Lords list.'),contents('bridge.jsonl'))
+    tyrion.ap=0; fire('CharacterSelected',{character=function() return tyrion end})
+    send('moves'); assert(heard('Move Somebody, no movement left, 0 of 4 places this turn.'),contents('bridge.jsonl'))
+    send('back')
+    multiplayer=true; send('lords'); assert(said()=='Not available in multiplayer.',said())
+    send('moves'); assert(said()=='Not available in multiplayer.' and #orders==1,said())
+    -- Your own settlement: the game's join-garrison command when it has one;
+    -- an army that does not start moving gets one retry just outside the spot.
+    multiplayer=false; names.names_tyrion='Tyrion'; tyrion.ap=100; tyrion.x,tyrion.y=120,100
+    cm.game_interface={join_garrison=function() end}
+    cm.join_garrison=function(_,lookup,key) orders[#orders+1]={'join',lookup,key} end
+    fire('CharacterSelected',{character=function() return tyrion end})
+    send('moves','letter:l'); assert(said()=='Lothern, button, yours, more than a turn, 3 of 5',said())
+    send('activate','activate')
+    assert(#orders==2 and orders[2][1]=='join' and orders[2][2]=='character_cqi:5' and orders[2][3]=='settlement:lothern','Join garrison order')
+    assert(said()=='Moving toward Lothern.',said())
+    tick(4); assert(#orders==3 and orders[3][1]=='character_cqi:5' and orders[3][2]==102 and orders[3][3]==100,'Retry next to the settlement')
+    assert(contents('native-ui-campaign-discovery.jsonl'):find('"target":"102,100"',1,true))
+    tick(7); assert(heard('Tyrion did not move.'),contents('bridge.jsonl'))
+    -- A failing game call is said, and the reader keeps working.
+    cm.get_local_faction=function() error('Synthetic failure') end
+    send('lords'); assert(said()=='Could not do that.' or said()=='Not available here.',said())
+    cm.get_local_faction=function() return hef end
+    local list_before=contents('bridge.jsonl'); send('next'); assert(contents('bridge.jsonl')~=list_before,'Reader still answers keys')
+end
+-- With the game's timer: one repeating game callback, registered at the first
+-- tick (never from inside a timer callback), runs the queued model jobs; the
+-- reader's timer only queues them and does the UI clicks.
+do
+    local make=start('campaign',nil,3)
+    nodes['tree.child0'].count=5
+    make('tree.child0.child3','radar_things',1)
+    make('tree.child0.child3.child0','dropdown_parent',1)
+    make('tree.child0.child3.child0.child0','units_dropdown',1)
+    local units_panel=make('tree.child0.child3.child0.child0.child0','panel',1,'',false)
+    make('tree.child0.child3.child0.child0.child0.child0','list_box',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0','character_row_0',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child0','dy_character_name',0,'Tyrion')
+    make('tree.child0.child4','bar_small_top',1)
+    local tab_units=make('tree.child0.child4.child0','tab_units',0)
+    function tab_units:SimulateLClick() dispatches=dispatches+1; clicked=self.path; units_panel.visible=true end
+    local function list(items) return {num_items=function() return #items end,item_at=function(_,i) return items[i+1] end} end
+    local names={names_tyrion='Tyrion',regions_onscreen_lothern='Lothern'}
+    effect={get_localised_string=function(key) return names[key] or '' end}
+    local hef={}; function hef:name() return 'hef' end
+    local settlement={}; function settlement:logical_position_x() return 100 end; function settlement:logical_position_y() return 100 end
+    local lothern={name=function() return 'lothern' end,province_name=function() return 'prov_eataine' end,settlement=function() return settlement end,
+        is_abandoned=function() return false end,owning_faction=function() return hef end}
+    local tyrion={x=110,y=100}
+    function tyrion:cqi() return 5 end; function tyrion:get_forename() return 'names_tyrion' end; function tyrion:get_surname() return '' end
+    function tyrion:character_type(t) return t=='general' end; function tyrion:has_military_force() return true end
+    function tyrion:military_force() return {is_armed_citizenry=function() return false end,unit_list=function() return list({1,2}) end} end
+    function tyrion:logical_position_x() return self.x end; function tyrion:logical_position_y() return self.y end
+    function tyrion:action_points_remaining_percent() return 100 end; function tyrion:in_settlement() return false end
+    function hef:character_list() return list({tyrion}) end; function hef:faction_leader() return tyrion end
+    function hef:region_list() return list({lothern}) end; function hef:at_war_with() return false end
+    local orders,pump,interval={}
+    cm={is_multiplayer=function() return false end,get_local_faction=function() return hef end,is_local_players_turn=function() return true end,
+        model=function() return {world=function() return {region_manager=function() return {region_list=function() return list({lothern}) end} end} end,
+            character_can_reach_settlement=function() return true end} end,
+        get_character_by_cqi=function() return tyrion end,game_interface={join_garrison=function() end},
+        join_garrison=function(_,lookup,key) orders[#orders+1]={lookup,key} end,
+        callback=function() error('No game timer may be registered from inside a timer callback') end,
+        repeat_callback=function(_,fn,t,name) assert(not pump,'One repeating game timer'); pump,interval=fn,t end}
+    begin(); for n=1,12 do tick(1) end
+    assert(pump and interval==0.2 and contents('native-ui-campaign-discovery.jsonl'):find('"kind":"model-pump","on":true',1,true))
+    local session=contents('reader-state.tsv'):match('^WH2READER1\t([^\t]+)\t')
+    local seq=0
+    local function send(...)
+        local lines={'WH2KEYS1\tcompanion\t' .. session .. '\t1'}
+        for _,action in ipairs({...}) do seq=seq+1; lines[#lines+1]=seq .. '\t' .. action end
+        files[prefix .. 'keys.tsv']=table.concat(lines,'\n') .. '\n'
+        tick(1)
+    end
+    send('noop')
+    local function said() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
+    local function heard(text) return contents('bridge.jsonl'):find('"text":"' .. text .. '"',1,true)~=nil end
+    send('lords'); assert(dispatches==0,'F6 waits for the game timer')
+    pump(); tick(1)
+    assert(dispatches==2 and clicked=='tree.child0.child3.child0.child0.child0.child0.child0','Then opens the list and clicks the lord')
+    assert(heard('Tyrion, 2 units, 100 percent movement.'),contents('bridge.jsonl'))
+    send('moves'); pump(); assert(said()=='Lothern, button, yours, this turn, 1 of 2',said())
+    send('activate'); assert(said()=='Move Tyrion to Lothern? Press Enter again to confirm.',said())
+    send('activate'); assert(#orders==0,'The order waits for the game timer')
+    pump(); assert(#orders==1 and orders[1][1]=='character_cqi:5' and orders[1][2]=='settlement:lothern' and said()=='Moving to Lothern.',said())
+    tyrion.x=100; for n=1,4 do tick(1); pump() end
+    assert(heard('Tyrion arrived at Lothern.'),contents('bridge.jsonl'))
+    -- A game timer that stops: queued jobs are dropped after 3 s, said once.
+    send('moves'); tick(4)
+    assert(said()=='The game is busy. Try again.' and contents('native-ui-campaign-discovery.jsonl'):find('"kind":"model-stalled"',1,true),said())
+    pump(); assert(said()=='The game is busy. Try again.','Dropped jobs do not run later')
+end
 io=saved_io;os.date=saved_date
 print('PASS: ' .. scenarios .. ' campaign diagnostic scenarios; HUD readiness, scoped discovery, typed failures, capture protocol, replay/generation/lease guards, limits, cancellation and zero clicks')

@@ -1,7 +1,9 @@
 # Run the installed companion's Launch-Game function on its own (speech
 # stubbed), to test the player's one-step launch when NVDA is not running.
 # Records the started game process in <Evidence>/owned-game.json.
-param([Parameter(Mandatory=$true)][string]$Evidence)
+# -SkipIntro also loads the empty-movies pack (as Start-Session -Direct does),
+# so test runs do not wait about three minutes for the intro movies.
+param([Parameter(Mandatory=$true)][string]$Evidence, [switch]$SkipIntro)
 $ErrorActionPreference = 'Stop'
 [void][IO.Directory]::CreateDirectory($Evidence)
 if (Get-Process -Name Warhammer2 -ErrorAction SilentlyContinue) { throw 'Game already running; close it first.' }
@@ -11,6 +13,16 @@ $start = $source.IndexOf('    function Launch-Game {')
 $end = $source.IndexOf("`n    }", $start)
 if ($start -lt 0 -or $end -lt 0) { throw 'Launch-Game not found in the installed companion.' }
 $function = $source.Substring($start, $end - $start + 6)
+if ($SkipIntro) {
+    $skipDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..\work\skip-intro')).Path
+    if (-not (Test-Path -LiteralPath (Join-Path $skipDir 'warhammer_skip_intro.pack'))) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Build-SkipIntro.ps1') | Out-Null
+        if ($LASTEXITCODE) { throw 'Skip-intro pack build failed.' }
+    }
+    $modLine = "'mod `"warhammer_access.pack`";'"
+    if (-not $function.Contains($modLine)) { throw 'Mod list line not found in Launch-Game.' }
+    $function = $function.Replace($modLine, "'add_working_directory `"" + ($skipDir -replace '\\','/') + "`";', 'mod `"warhammer_skip_intro.pack`";', " + $modLine)
+}
 $script:Spoken = @()
 function Speak([string]$Text, [switch]$Force) { $script:Spoken += $Text }
 function Set-Status([string]$Text) { }

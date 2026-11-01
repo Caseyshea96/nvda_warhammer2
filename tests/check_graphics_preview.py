@@ -28,6 +28,8 @@ campaign_source = (root / 'diagnostics/campaign_readonly.lua').read_text(encodin
 # HUD reading mode (owner-approved toggle, 0.6.34) shares reader-state.tsv and keys.tsv with the menu keys.
 # Owner-approved HUD buttons (0.6.38): exactly one native click call site.
 assert campaign_source.count('SimulateLClick') == 1, 'Campaign module needs exactly one click call site'
+# 0.6.67 (owner, Nov 1): lords, settlements and moves read the model and give
+# move orders only through campaign_game(); the HUD reader itself never does.
 for forbidden in ['string.find', ':find(', 'trigger_shortcut', 'cm:']:
     assert forbidden not in campaign_source, f'Campaign discovery cannot use {forbidden}'
 for filename, execute in [('diagnostics/graphics_preview.lua', False), ('tests/graphics_preview_harness.lua', True),

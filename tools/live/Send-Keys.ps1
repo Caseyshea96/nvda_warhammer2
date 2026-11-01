@@ -1,7 +1,7 @@
 # Inject key presses (as a user would type them) for live tests of the
 # companion's menu keys. The game itself ignores injected keys; the companion's
 # focus-scoped hotkeys receive them. Names: Down Up Tab ShiftTab Home End Backspace
-# Enter Space Escape, or a single letter A-Z.
+# Enter Space Escape F6 ShiftF6 F7, or a single letter A-Z.
 param([Parameter(Mandatory=$true)][string[]]$Keys, [int]$DelayMs = 500)
 Add-Type -TypeDefinition @'
 using System; using System.Runtime.InteropServices;
@@ -10,10 +10,11 @@ public static class KeyInput {
 }
 '@
 $Keys = @($Keys | ForEach-Object { $_ -split ',' } | Where-Object { $_ })  # -File passes "a,b" as one string
-$codes = @{ Down=0x28; Up=0x26; Tab=0x09; Home=0x24; End=0x23; Enter=0x0D; Space=0x20; Escape=0x1B; Backspace=0x08 }
+$codes = @{ Down=0x28; Up=0x26; Tab=0x09; Home=0x24; End=0x23; Enter=0x0D; Space=0x20; Escape=0x1B; Backspace=0x08; F6=0x75; F7=0x76 }
 foreach ($name in $Keys) {
     $shift = $false
     if ($name -eq 'ShiftTab') { $vk = 0x09; $shift = $true }
+    elseif ($name -eq 'ShiftF6') { $vk = 0x75; $shift = $true }
     elseif ($codes.ContainsKey($name)) { $vk = $codes[$name] }
     elseif ($name -match '^[A-Za-z]$') { $vk = [int][char]$name.ToUpperInvariant() }
     else { throw "Unknown key name: $name" }

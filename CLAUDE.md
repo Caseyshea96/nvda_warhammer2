@@ -29,7 +29,8 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 ## Current state — read before working
 
 - `docs/AUTOMATION_SESSION.md` — full session history and current stop point.
-- `docs/TRIAL_3_0_6_64.md` — latest (also 0.6.65: NVDA only, new names `warhammer_access.pack` / `WarhammerAccess`, migration; 0.6.66: Load Game, saves from before 0.6.65 load only by Continue): Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
+- `docs/MOVES_0_6_67.md` — latest: F6 lord/settlement, Shift+F6 next lord, F7 move list (movement unblocked Nov 1; attacks not); model reads and orders only in one repeating game-timer job queue; the freeze / silent reader is pre-existing (0.6.66 too) and frequent.
+- `docs/TRIAL_3_0_6_64.md` — (also 0.6.65: NVDA only, new names `warhammer_access.pack` / `WarhammerAccess`, migration; 0.6.66: Load Game, saves from before 0.6.65 load only by Continue): Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
 - `docs/FIRST_TRIAL_0_6_60.md` — first outside trial fixes (main menu on other PCs, Continue Campaign, launch without TW Mod Manager, HUD reading on by default; accepted 0.6.60) 0.6.61: "ready" waits for the menu after the intro movies; 0.6.62: Select Lord without exact layout checks; 0.6.63: the installer upgrades in place (trial 2 ran the old build) and "ready" says the version.
 - `docs/SETTLEMENTS_0_6_43.md` — provinces, settlement panel, building and recruiting by keyboard, intro check box, player guide, armies read, silent-reader fix, document reading order and province/unit figures (accepted 0.6.59).
 - `docs/CAMPAIGN_BUTTONS_0_6_39.md` — HUD buttons, End Turn, first turn by keyboard (0.6.38–0.6.42).
@@ -111,7 +112,7 @@ camera jumps, checks the reader keeps ticking) test the silent-reader fix;
 `tests/replay_capture.lua <work/.../native-ui-campaign-discovery.jsonl> [run] [next-run]`
 replays a recorded campaign screen through the reader offline and prints every item as
 spoken (no run: lists runs); use it to check reading changes against real captures.
-Player-mode checks (no lease, like the friend): `Test-PlayerLaunch.ps1 -Evidence ...` runs the installed
+Player-mode checks (no lease, like the friend): `Test-PlayerLaunch.ps1 -Evidence ... [-SkipIntro]` runs the installed
 companion's launch alone (game starts with `nvda_mods.txt`, no TW Mod Manager); then start the companion
 with `-MenuKeys` and drive with Send-Keys. Developer verify mode turns HUD reading on itself; players get
 it on by default since 0.6.60. Main-menu and Select Lord checks must not depend on this PC's exact screen.
@@ -203,8 +204,13 @@ Ending a turn makes the game autosave (save_games); tell the owner.
 Lord selection and Start Campaign (always confirmed) are unblocked (owner,
 October 29). Before a live campaign start, back up save_games and
 advice_history. Campaign HUD buttons and tabs are allowed (End Turn/Quit/Exit/Load confirmed).
-Changing settings, map/army orders, gameplay and co-op
-stay blocked unless the owner explicitly unblocks them.
+Army movement is unblocked (owner, Nov 1: F6/F7 move list); attacks, other
+map orders, changing settings and co-op stay blocked unless the owner
+explicitly unblocks them. Battles will be auto resolved (owner decision).
+**Campaign model access:** only inside the one repeating game timer
+(`cm:repeat_callback`, registered at the first tick) — never read the model
+or register a game timer from the reader's `real_timer` callback (live:
+orders ignored, freezes).
 
 ### Completion criteria
 

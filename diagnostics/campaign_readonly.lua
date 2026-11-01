@@ -1,6 +1,7 @@
--- Read-only campaign HUD reader. Players get it without a flag; the developer
--- flag adds the status/request channel and its limits. Never queries the
--- model or sends game commands.
+-- Campaign HUD reader. Players get it without a flag; the developer flag adds
+-- the status/request channel and its limits. HUD reading never queries the
+-- model; F6/F7 (lords, settlements, moving) read it, and a confirmed move is
+-- the only game command (the game's own move order).
 if not core:is_campaign() or core:is_battle() then return end
 local base=os.getenv('LOCALAPPDATA')
 if type(base)~='string' or base=='' then return end
@@ -28,7 +29,7 @@ local initial,owner,expiry,mode=read_flag()
 local diagnostic=initial~=nil
 if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player' end
 local session='campaign:' .. owner .. ':' .. tostring({})
-local version='0.6.66'
+local version='0.6.67'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -917,8 +918,418 @@ local function menu_activate()
     speak(clicked and ('Building ' .. option.name .. '.') or ('Could not build ' .. option.name .. '.'))
     post_click=ticks+2
 end
+-- Lords, settlements and movement (owner, November 1): F6 switches between a
+-- lord and his settlement, Shift+F6 goes to the next lord, F7 lists places the
+-- selected lord can move to. Selecting clicks a row in the game's own Lords &
+-- Heroes or Provinces list, as a player would; a move is the game's own move
+-- order through its command queue. Attacks are not offered yet.
+local selected_cqi,selected_region -- the game's current selection (its events)
+local pending_select -- a list row to click once the game has opened the list
+local moving -- the lord last ordered to move, watched until he stops
+local fast_count=0
+local function campaign_game()
+    local ok,value=pcall(function() return cm end)
+    if ok and type(value)=='table' then return value end
+end
+local function localised(key)
+    if type(key)~='string' or key=='' then return nil end
+    local ok,value=read(function() local v=effect.get_localised_string(key); return v end)
+    if ok and type(value)=='string' then value=clean(value); if value~='' then return value end end
+end
+local function list_items(list)
+    local items={}
+    local ok,count=read(function() local v=list:num_items(); return v end)
+    if not ok or type(count)~='number' then return items end
+    for i=0,math.min(count,1024)-1 do
+        local got,item=read(function() local v=list:item_at(i); return v end)
+        if got and item then items[#items+1]=item end
+    end
+    return items
+end
+local function player_faction()
+    local game=campaign_game(); if not game then return nil,'Not available here.' end
+    local ok_mp,mp=read(function() local v=game:is_multiplayer(); return v end)
+    if not ok_mp or mp~=false then return nil,'Not available in multiplayer.' end
+    local ok,faction=read(function() local v=game:get_local_faction(true); return v end)
+    if not ok or type(faction)=='boolean' or not faction then return nil,'Not available here.' end
+    return faction,nil,game
+end
+local function position(object)
+    local ok,x=read(function() local v=object:logical_position_x(); return v end)
+    local ok2,y=read(function() local v=object:logical_position_y(); return v end)
+    if ok and ok2 and type(x)=='number' and type(y)=='number' then return x,y end
+end
+local function distance(ax,ay,bx,by) local dx,dy=ax-bx,ay-by; return math.sqrt(dx*dx+dy*dy) end
+local function percent(value) return type(value)=='number' and math.floor(value+0.5) or nil end
+local function lord_name(char)
+    local _,fore=read(function() local v=char:get_forename(); return v end)
+    local _,sur=read(function() local v=char:get_surname(); return v end)
+    local first,last=localised(fore),localised(sur)
+    if first and last then return first .. ' ' .. last,first end
+    return first or last or 'Lord',first or last or 'Lord'
+end
+-- The player's lords who lead an army (not garrisons), faction leader first.
+local function player_lords(faction)
+    local lords={}
+    local ok,list=read(function() local v=faction:character_list(); return v end)
+    if not ok or not list then return lords end
+    local _,leader=read(function() local v=faction:faction_leader(); return v end)
+    local _,leader_cqi=read(function() local v=leader:cqi(); return v end)
+    for _,char in ipairs(list_items(list)) do
+        local _,general=read(function() local v=char:character_type('general'); return v end)
+        local _,army=read(function() local v=char:has_military_force(); return v end)
+        local _,citizens=read(function() local v=army==true and char:military_force():is_armed_citizenry(); return v end)
+        local _,cqi=read(function() local v=char:cqi(); return v end)
+        if general==true and army==true and citizens~=true and type(cqi)=='number' then
+            local full,first=lord_name(char)
+            lords[#lords+1]={char=char,cqi=cqi,name=full,short=first,leader=cqi==leader_cqi}
+        end
+    end
+    table.sort(lords,function(a,b) if a.leader~=b.leader then return a.leader end; return a.cqi<b.cqi end)
+    return lords
+end
+local function region_info(region)
+    local _,key=read(function() local v=region:name(); return v end)
+    local _,province=read(function() local v=region:province_name(); return v end)
+    local _,settlement=read(function() local v=region:settlement(); return v end)
+    local x,y
+    if settlement then x,y=position(settlement) end
+    return {region=region,key=key,province=province,settlement=settlement,x=x,y=y,
+        name=localised('regions_onscreen_' .. tostring(key)) or tostring(key)}
+end
+local function owned_regions(faction)
+    local ok,list=read(function() local v=faction:region_list(); return v end)
+    local regions={}
+    for _,region in ipairs(ok and list and list_items(list) or {}) do regions[#regions+1]=region_info(region) end
+    return regions
+end
+local function owner_label(info,faction)
+    local _,abandoned=read(function() local v=info.region:is_abandoned(); return v end)
+    if abandoned==true then return 'ruins','ruins' end
+    local _,owner=read(function() local v=info.region:owning_faction(); return v end)
+    local _,owner_key=read(function() local v=owner:name(); return v end)
+    local _,mine=read(function() local v=faction:name(); return v end)
+    if type(owner_key)~='string' then return 'unknown owner','other' end
+    if owner_key==mine then return 'yours','own' end
+    local _,war=read(function() local v=faction:at_war_with(owner); return v end)
+    local name=localised('factions_screen_name_' .. owner_key) or 'another faction'
+    if war==true then return name .. ', at war','enemy' end
+    return name,'other'
+end
+local function lord_summary(lord)
+    local parts={lord.name}
+    local _,units=read(function() local v=lord.char:military_force():unit_list():num_items(); return v end)
+    if type(units)=='number' then parts[#parts+1]=units .. (units==1 and ' unit' or ' units') end
+    local _,ap=read(function() local v=lord.char:action_points_remaining_percent(); return v end)
+    ap=percent(ap)
+    if ap then parts[#parts+1]=ap==0 and 'no movement left' or (ap .. ' percent movement') end
+    return table.concat(parts,', ') .. '.'
+end
+local function ui_path(names)
+    local ok,node=read(function() local v=core:get_ui_root(); return v end)
+    if not ok or not node then return nil end
+    for _,step in ipairs(names) do node=find_named(node,step[1],step[2]); if not node then return nil end end
+    return node
+end
+local function shown(node) local ok,value=read(function() local v=node:Visible(); return v end); return ok and value==true end
+local function same_name(text,target)
+    text=type(text)=='string' and clean(text) or ''
+    return text~='' and (text==target.name or text==target.short)
+end
+-- Clicks the target's row when its list is open: 'clicked', 'closed' or 'missing'.
+local function click_row(target)
+    local dropdown=target.kind=='lord' and 'units_dropdown' or 'regions_dropdown'
+    local panel=ui_path({{'layout',1},{'radar_things',1},{dropdown,2},{'panel',1}})
+    if not panel or not shown(panel) then return 'closed' end
+    local list=find_named(panel,'list_box',4); if not list then return 'missing' end
+    local _,count=read(function() local v=list:ChildCount(); return v end)
+    for i=0,math.min(type(count)=='number' and count or 0,256)-1 do
+        local _,address=read(function() local v=list:Find(i); return v end)
+        local ok,row=read(function() local v=UIComponent(address); return v end)
+        local _,id=read(function() local v=ok and row:Id(); return v end)
+        local match=false
+        if type(id)=='string' and target.kind=='lord' and id:sub(1,14)=='character_row_' then
+            local label=find_named(row,'dy_character_name',3)
+            local _,text=read(function() local v=label and label:GetStateText(); return v end)
+            match=same_name(text,target)
+        elseif type(id)=='string' and target.kind=='settlement' then
+            match=id=='row_entry_' .. tostring(target.province)
+        end
+        if match then
+            local _,interactive=read(function() local v=row:IsInteractive(); return v end)
+            if not shown(row) or interactive~=true then return 'missing' end
+            emit('{"kind":"activation-dispatch","id":' .. quoted(id) .. ',"name":' .. quoted(target.name) .. ',"source":"select"}')
+            if not native_click(row) then return 'missing' end
+            return 'clicked'
+        end
+    end
+    return 'missing'
+end
+-- Model reads and orders run on the game's own timer, as the game's scripts
+-- do: one repeating game-timer callback, registered once at the first tick,
+-- runs the jobs the reader queues. Live, the game ignored orders made from
+-- the reader's timer; it froze while the reader's timer read the model during
+-- a selection or a march, and again right after a game timer was registered
+-- from inside the reader's timer. UI clicks stay on the reader's timer.
+-- Without the game timer (tests), jobs run at once.
+local model_jobs,model_pump_on,model_pump_tick,model_wait_tick={},false,nil,nil
+local function model_pump()
+    model_pump_tick=ticks
+    for _=1,4 do
+        local job=table.remove(model_jobs,1)
+        if not job then break end
+        job()
+    end
+    if not model_jobs[1] then model_wait_tick=nil end
+end
+local function model_call(fn)
+    local function run()
+        local ok,err=pcall(fn)
+        if not ok then
+            pcall(function() emit('{"kind":"command-error","action":"model","error":' .. quoted(bounded(tostring(err),300)) .. '}') end)
+            menu=nil; pending_select=nil; speak('Could not do that.')
+        end
+    end
+    if not model_pump_on then run(); return end
+    if #model_jobs<16 then
+        model_jobs[#model_jobs+1]=run
+        model_wait_tick=model_wait_tick or ticks
+    end
+end
+local function select_failed(target)
+    speak('Could not find ' .. target.name .. ' in the ' .. (target.kind=='lord' and 'Lords' or 'Provinces') .. ' list.')
+end
+local function selected(target)
+    if target.kind=='lord' then selected_cqi,selected_region=target.cqi,nil else selected_cqi,selected_region=nil,target.key end
+    speak(target.summary)
+    post_click=ticks+2
+end
+-- On the reader's timer: click the target's row, opening its list first.
+local function select_step()
+    local pending=pending_select; if not pending then return end
+    local target=pending.target
+    local result=click_row(target)
+    if result=='clicked' then pending_select=nil; selected(target); return end
+    if not pending.until_fast then
+        pending.until_fast=fast_count+30
+        if result=='closed' then
+            local id=target.kind=='lord' and 'tab_units' or 'tab_regions'
+            local tab=ui_path({{'layout',1},{id,3}})
+            local _,interactive=read(function() local v=tab and tab:IsInteractive(); return v end)
+            if tab and shown(tab) and interactive==true and native_click(tab) then
+                emit('{"kind":"activation-dispatch","id":' .. quoted(id) .. ',"source":"select"}'); return
+            end
+        end
+        pending_select=nil; select_failed(target); return
+    end
+    if fast_count>=pending.until_fast then pending_select=nil; select_failed(target) end
+end
+local function settlement_target(info)
+    local province=localised('provinces_onscreen_' .. tostring(info.province))
+    return {kind='settlement',key=info.key,province=info.province,name=info.name,summary=info.name .. (province and (', ' .. province) or '') .. '.'}
+end
+local function lord_target(lord) return {kind='lord',cqi=lord.cqi,name=lord.name,short=lord.short,summary=lord_summary(lord)} end
+local function choose(target) pending_confirm=nil; menu=nil; pending_select={target=target} end
+-- In the game's callback: decide what F6 / Shift+F6 selects.
+local function switch_selection(next_lord)
+    local faction,why=player_faction(); if not faction then speak(why); return end
+    local lords=player_lords(faction)
+    local current
+    for place,lord in ipairs(lords) do if lord.cqi==selected_cqi then current=place end end
+    if next_lord then
+        if #lords==0 then speak('You have no lords with armies.'); return end
+        choose(lord_target(lords[current and (current%#lords)+1 or 1])); return
+    end
+    if current then
+        -- From a lord to his settlement: the one he stands in, else the nearest of yours.
+        local lord=lords[current]
+        local regions=owned_regions(faction)
+        if #regions==0 then speak('You have no settlements.'); return end
+        local x,y=position(lord.char)
+        local _,here=read(function() local v=lord.char:has_region() and lord.char:region():name(); return v end)
+        local best,best_distance
+        for _,info in ipairs(regions) do
+            local d=(info.key==here) and -1 or (x and info.x and distance(x,y,info.x,info.y)) or math.huge
+            if not best_distance or d<best_distance then best,best_distance=info,d end
+        end
+        choose(settlement_target(best)); return
+    end
+    if #lords==0 then speak('You have no lords with armies.'); return end
+    -- From a settlement (or nothing) to the nearest lord, else the faction leader.
+    local chosen=lords[1]
+    if selected_region then
+        for _,info in ipairs(owned_regions(faction)) do
+            if info.key==selected_region and info.x then
+                local best_distance
+                for _,lord in ipairs(lords) do
+                    local x,y=position(lord.char)
+                    local d=x and distance(x,y,info.x,info.y)
+                    if d and (not best_distance or d<best_distance) then chosen,best_distance=lord,d end
+                end
+            end
+        end
+    end
+    choose(lord_target(chosen))
+end
+-- In the game's callback: the places the selected lord can move to.
+local function open_moves()
+    local faction,why,game=player_faction(); if not faction then speak(why); return end
+    local _,turn=read(function() local v=game:is_local_players_turn(); return v end)
+    if turn==false then speak('Wait for your turn.'); return end
+    local lord
+    for _,candidate in ipairs(player_lords(faction)) do if candidate.cqi==selected_cqi then lord=candidate end end
+    if not lord then speak('Select a lord first: press F6.'); return end
+    local lx,ly=position(lord.char)
+    if not lx then speak('Could not read where ' .. lord.name .. ' is.'); return end
+    local _,ap=read(function() local v=lord.char:action_points_remaining_percent(); return v end)
+    ap=percent(ap) or 0
+    local _,in_settlement=read(function() local v=lord.char:in_settlement(); return v end)
+    local ok,list=read(function() local v=game:model():world():region_manager():region_list(); return v end)
+    local places={}
+    for _,region in ipairs(ok and list and list_items(list) or {}) do
+        local info=region_info(region)
+        if info.x and info.settlement then info.distance=distance(lx,ly,info.x,info.y); places[#places+1]=info end
+    end
+    table.sort(places,function(a,b) return a.distance<b.distance end)
+    local items,reachable={},0
+    for order,info in ipairs(places) do
+        if #items>=15 then break end
+        if not (in_settlement==true and info.distance<2) then
+            local label,kind=owner_label(info,faction)
+            local reach=false
+            if ap>0 then
+                local got,value=read(function() local v=game:model():character_can_reach_settlement(lord.char,info.settlement); return v end)
+                reach=got and value==true
+            end
+            if reach then reachable=reachable+1 end
+            items[#items+1]={name=info.name,role='button',states={label,reach and 'this turn' or 'more than a turn'},
+                key='move:' .. tostring(info.key),place=info,kind=kind,reach=reach,order=order}
+        end
+    end
+    if #items==0 then speak('No places found.'); return end
+    -- Places reachable this turn first, nearest first in each group.
+    table.sort(items,function(a,b) if a.reach~=b.reach then return a.reach end; return a.order<b.order end)
+    items[#items+1]={name='Close',role='button',states={},key='move:close',close=true}
+    pending_confirm=nil
+    menu={kind='move',owner=lord,items=items,index=1}
+    speak('Move ' .. lord.name .. ', ' .. (ap==0 and 'no movement left' or (ap .. ' percent movement')) .. ', '
+        .. reachable .. ' of ' .. (#items-1) .. ' places this turn.')
+    speak_option(1)
+end
+-- A command on the game's script interface, or nil (indexing a missing one may throw).
+local function game_command(game,name)
+    local ok,value=pcall(function() return rawget(game,'game_interface')[name] end)
+    if ok then return value end
+    return nil
+end
+-- Live diagnosis: the lord's state when an order is given.
+local function log_lord_state(game,char)
+    local fields={}
+    for _,name in ipairs({'is_at_sea','in_settlement','has_garrison_residence','is_embedded_in_military_force','action_points_remaining_percent','has_military_force'}) do
+        local ok,value=read(function() local v=char[name](char); return v end)
+        fields[#fields+1]=quoted(name) .. ':' .. quoted(ok and tostring(value) or 'error')
+    end
+    local _,turn=read(function() local v=game:whose_turn_is_it(); return v end)
+    local _,mine=read(function() local v=game:get_local_faction_name(true); return v end)
+    fields[#fields+1]='"turn":' .. quoted(tostring(turn)) .. ',"local":' .. quoted(tostring(mine))
+    emit('{"kind":"lord-state",' .. table.concat(fields,',') .. '}')
+end
+local function order(method,cqi,a,b)
+    local game=campaign_game(); local lookup='character_cqi:' .. cqi
+    local ok,err=pcall(function()
+        pcall(function() game:enable_movement_for_character(lookup) end)
+        if method=='join_garrison' then game:join_garrison(lookup,'settlement:' .. a)
+        else game:move_to(lookup,a,b,true) end
+    end)
+    emit('{"kind":"order-run","method":' .. quoted(method) .. ',"cqi":' .. cqi .. ',"target":' .. quoted(tostring(a) .. (b and (',' .. b) or ''))
+        .. ',"ok":' .. tostring(ok) .. ',"error":' .. quoted(ok and '' or bounded(tostring(err),300)) .. '}')
+    return ok,err
+end
+-- In the game's callback: give the confirmed move order and start watching.
+local function give_order(lord,option)
+    local faction,why,game=player_faction(); if not faction then speak(why); return end
+    local _,char=read(function() local v=game:get_character_by_cqi(lord.cqi); return v end)
+    local x,y
+    if char then x,y=position(char) end
+    if not x then speak(lord.name .. ' is no longer available.'); return end
+    local sx,sy=option.place.x,option.place.y
+    -- Your own settlement: the game's command for entering it, when it has one.
+    local method='move_to'
+    if option.kind=='own' and type(game_command(game,'join_garrison'))=='function' then method='join_garrison' end
+    emit('{"kind":"move-order","method":' .. quoted(method) .. ',"cqi":' .. lord.cqi .. ',"region":' .. quoted(tostring(option.place.key))
+        .. ',"x":' .. sx .. ',"y":' .. sy .. ',"from_x":' .. x .. ',"from_y":' .. y .. '}')
+    pcall(log_lord_state,game,char)
+    local ordered
+    if method=='join_garrison' then ordered=order('join_garrison',lord.cqi,option.place.key) end
+    if not ordered then ordered=order('move_to',lord.cqi,sx,sy) end
+    if not ordered then speak('Could not move ' .. lord.name .. '.'); return end
+    speak((option.reach and 'Moving to ' or 'Moving toward ') .. option.name .. '.')
+    moving={cqi=lord.cqi,name=lord.name,dest=option.name,x=sx,y=sy,x0=x,y0=y,last_x=x,last_y=y,still=0,started=ticks,moved=false,retried=false}
+end
+-- On the reader's timer: the move list's Enter (asks first).
+local function move_activate(option)
+    if option.close then menu=nil; pending_confirm=nil; speak('Move list closed.'); browse(0,false); return end
+    if option.kind=='enemy' then speak('Attacking is not supported yet.'); return end
+    local lord=menu.owner
+    if not (pending_confirm and pending_confirm.key==option.key and ticks<=pending_confirm.until_tick) then
+        pending_confirm={key=option.key,until_tick=ticks+10}
+        speak('Move ' .. lord.name .. ' to ' .. option.name .. '? Press Enter again to confirm.'); return
+    end
+    pending_confirm=nil; menu=nil
+    model_call(function() give_order(lord,option) end)
+end
+-- In the game's callback: say where the lord stopped (arrived, or how far he got).
+local function watch_moving()
+    if not moving then return end
+    local game=campaign_game()
+    local _,char=read(function() local v=game:get_character_by_cqi(moving.cqi); return v end)
+    local x,y
+    if char then x,y=position(char) end
+    if not x then moving=nil; return end
+    if x~=moving.x0 or y~=moving.y0 then moving.moved=true end
+    if x==moving.last_x and y==moving.last_y then moving.still=moving.still+1 else moving.still=0 end
+    moving.last_x,moving.last_y=x,y
+    local elapsed=ticks-moving.started
+    if elapsed<=12 then emit('{"kind":"move-watch","x":' .. x .. ',"y":' .. y .. ',"tick":' .. elapsed .. '}') end
+    if not moving.moved and elapsed>=3 and not moving.retried then
+        -- A settlement's own spot may not be a place an army can stand: aim
+        -- just outside it, on the side the lord comes from.
+        moving.retried=true
+        local d=distance(moving.x0,moving.y0,moving.x,moving.y)
+        if d>3 then
+            order('move_to',moving.cqi,math.floor(moving.x+(moving.x0-moving.x)/d*2+0.5),math.floor(moving.y+(moving.y0-moving.y)/d*2+0.5))
+        end
+        return
+    end
+    if not moving.moved and elapsed>=9 then speak(moving.name .. ' did not move.'); moving=nil; return end
+    if (moving.moved and moving.still>=2) or elapsed>=60 then
+        local _,ap=read(function() local v=char:action_points_remaining_percent(); return v end)
+        ap=percent(ap)
+        if distance(x,y,moving.x,moving.y)<=3 then speak(moving.name .. ' arrived at ' .. moving.dest .. '.')
+        else speak(moving.name .. ' stopped on the way to ' .. moving.dest .. (ap and (', ' .. (ap==0 and 'no movement left' or (ap .. ' percent movement left'))) or '') .. '.') end
+        moving=nil
+    end
+end
+local function log_game_api()
+    local names={}
+    pcall(function()
+        local index=getmetatable(rawget(campaign_game(),'game_interface')).__index
+        if type(index)=='table' then for name in pairs(index) do if type(name)=='string' then names[#names+1]=name end end end
+    end)
+    local game=campaign_game()
+    for _,name in ipairs({'move_to','join_garrison','leave_garrison','attack_region','attack','teleport_to','enable_movement_for_character',
+        'select_character','select_settlement','scroll_camera_to_character','scroll_camera_to_settlement','set_camera_position'}) do
+        names[#names+1]=name .. '=' .. type(game and game_command(game,name))
+    end
+    pcall(function() for name in pairs(CampaignUI) do if type(name)=='string' then names[#names+1]='CampaignUI.' .. name end end end)
+    table.sort(names)
+    emit('{"kind":"game-api","count":' .. #names .. ',"names":' .. quoted(bounded(table.concat(names,' '),60000)) .. '}')
+end
 local function activate_current()
-    if menu then menu_activate(); return end
+    if menu then
+        if menu.kind=='move' then move_activate(menu.items[menu.index]) else menu_activate() end
+        return
+    end
     if not finished or #entries==0 or index==0 then speak('No item selected.'); return end
     local item=entries[index]
     local id=type(item.id)=='string' and item.id or ''
@@ -945,10 +1356,24 @@ local function speak_current()
     browse(index==0 and 1 or 0,false)
 end
 local function key_action(action)
+    -- An error in these never stops the reader: it is logged and said.
+    local function guarded(fn,...)
+        local ok,err=pcall(fn,...)
+        if not ok then
+            emit('{"kind":"command-error","action":' .. quoted(action) .. ',"error":' .. quoted(bounded(tostring(err),300)) .. '}')
+            menu=nil; pending_select=nil; speak('Could not do that.')
+        end
+    end
+    if action=='lords' or action=='nextlord' then guarded(model_call,function() switch_selection(action=='nextlord') end); return end
+    if action=='moves' then guarded(model_call,open_moves); return end
+    if menu and menu.kind=='move' and action=='activate' then guarded(move_activate,menu.items[menu.index]); return end
     if menu then
         if action=='next' or action=='previous' then menu_move(action=='next' and 1 or -1)
         elseif action=='first' or action=='last' then menu.index=0; menu_move(action=='first' and 1 or -1)
-        elseif action=='activate' then menu_activate()
+        elseif action=='activate' then activate_current()
+        elseif action=='back' then
+            local kind=menu.kind; menu=nil; pending_confirm=nil
+            speak(kind=='move' and 'Move list closed.' or 'Upgrades closed.'); browse(0,false)
         elseif #action==8 and action:sub(1,7)=='letter:' then
             local letter=action:sub(8,8)
             for offset=1,#menu.items do
@@ -1035,6 +1460,17 @@ local function tick()
                 for _=1,(diagnostic and 1 or 3) do if phase=='scanning' then page_read() end end
             end
             if phase=='ready' or phase=='limited' then watch_live_text() end
+            -- Jobs the game timer has not run for 3 s are dropped (said once).
+            if model_wait_tick and ticks-model_wait_tick>3 then
+                model_jobs={}; model_wait_tick=nil; pending_select=nil; moving=nil
+                emit('{"kind":"model-stalled","last_pump":' .. tostring(model_pump_tick) .. '}')
+                speak('The game is busy. Try again.')
+            end
+            -- One watch job at a time (a lost one is replaced after 5 s).
+            if moving and (not moving.wait_tick or ticks-moving.wait_tick>5) then
+                moving.wait_tick=ticks
+                model_call(function() if moving then moving.wait_tick=nil; watch_moving() end end)
+            end
             if (phase=='ready' or phase=='limited') and post_click and ticks>=post_click then
                 post_click=nil; remember_entries(); refresh_announce=request_capture('after-activation')
             end
@@ -1065,7 +1501,9 @@ local function tick()
             mode_chosen=true; reader_mode=true; keys_owner=nil
             emit('{"kind":"reader-mode","on":true,"source":"player-default"}'); publish_reader_state(true)
         end
+        fast_count=fast_count+1
         if reader_mode then poll_keys() end
+        if pending_select and not pcall(select_step) then pending_select=nil; speak('Could not do that.') end
         publish_reader_state(false)
         if polling and not repeating then real_timer.register_singleshot(timer_name,(reader_mode and not auto_reader) and 100 or 1000) end
     end)
@@ -1111,6 +1549,19 @@ core:add_listener('warhammer_campaign_discovery_first_tick','FirstTickAfterWorld
                 pcall(function() emit('{"kind":"timer-rearmed","source":' .. quoted(event) .. '}') end)
             end,true)
         end
+        -- The selection, for F6 / F7 (read from the game's own events).
+        core:add_listener('warhammer_campaign_selection_character','CharacterSelected',true,function(context)
+            pcall(function() selected_cqi=context:character():cqi(); selected_region=nil end)
+        end,true)
+        core:add_listener('warhammer_campaign_selection_settlement','SettlementSelected',true,function(context)
+            pcall(function() selected_region=context:garrison_residence():region():name(); selected_cqi=nil end)
+        end,true)
+        -- The one repeating game timer for model jobs (registered here, at the
+        -- first tick, never from inside a timer callback).
+        local game=campaign_game()
+        model_pump_on=game~=nil and pcall(function() game:repeat_callback(function() pcall(model_pump) end,0.2,'warhammer_access_model_jobs') end)
+        emit('{"kind":"model-pump","on":' .. tostring(model_pump_on) .. '}')
+        pcall(log_game_api)
         request_capture('first-tick');publish_status()
         if repeating then real_timer.register_repeating(timer_name,100); real_timer.register_repeating(watchdog_name,3000)
         else real_timer.register_singleshot(timer_name,1000); real_timer.register_singleshot(watchdog_name,3000) end

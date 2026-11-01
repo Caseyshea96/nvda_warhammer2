@@ -38,6 +38,10 @@ namespace WarhammerAccessibility {
             Bind(0x0D, NoRepeat, "activate"); Bind(0x20, NoRepeat, "activate");
             // Backspace: back one step in a sequence of choices (Select Lord).
             Bind(0x08, NoRepeat, "back");
+            // Campaign map: F6 switches between a lord and his settlement,
+            // Shift+F6 goes to the next lord, F7 lists places to move to.
+            Bind(0x75, NoRepeat, "lords"); Bind(0x75, NoRepeat | 0x0004, "nextlord");
+            Bind(0x76, NoRepeat, "moves");
             for (uint letter = 0x41; letter <= 0x5A; letter++)
                 Bind(letter, NoRepeat, "letter:" + (char)(letter + 32));
         }
