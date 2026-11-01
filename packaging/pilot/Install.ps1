@@ -66,8 +66,29 @@ try {
     try {
         $app = Join-Path $base 'App'
         $target = Join-Path $data 'jaws_access.pack'
+        # An earlier version installed by this installer is upgraded in place:
+        # its pack matches the receipt and its files match its own manifest.
+        # Anything else (a pack or file we did not install, or one changed
+        # since) is still left alone.
+        $previous = $null
+        $receiptPath = Join-Path $base 'receipt.json'
+        if (Test-Path -LiteralPath $receiptPath) {
+            try { $previous = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json } catch { $previous = $null }
+        }
+        $previousManifest = $null
+        $previousManifestPath = Join-Path $app 'manifest.json'
+        if (Test-Path -LiteralPath $previousManifestPath) {
+            try { $previousManifest = Get-Content -LiteralPath $previousManifestPath -Raw | ConvertFrom-Json } catch { $previousManifest = $null }
+        }
+        $replacePack = $false
         if ((Test-Path -LiteralPath $target) -and (Get-Hash $target) -ne $manifest.files.'jaws_access.pack') {
-            throw 'A different jaws_access.pack exists. Back it up and remove it before installing this pilot.'
+            $ours = $previous -and $previous.pack_sha256 -and $previous.game_path -and
+                ((Get-Hash $target) -eq ([string]$previous.pack_sha256).ToLowerInvariant()) -and
+                ([IO.Path]::GetFullPath([string]$previous.game_path).TrimEnd('\','/') -eq [IO.Path]::GetFullPath($GamePath).TrimEnd('\','/'))
+            if (-not $ours) {
+                throw 'A jaws_access.pack that this installer did not install (or that was changed) is in the game data folder. Back it up and remove it, then run Install.cmd again.'
+            }
+            $replacePack = $true
         }
         $oldProbe = Join-Path $data 'jaws_probe.pack'
         if ((Test-Path -LiteralPath $oldProbe) -and (Get-Hash $oldProbe) -ne $manifest.previous_probe_sha256) {
@@ -79,7 +100,9 @@ try {
                 if ($name -eq 'jaws_access.pack') { continue }
                 $existing = Join-Path $app $name
                 if ((Test-Path -LiteralPath $existing) -and (Get-Hash $existing) -ne $manifest.files.$name) {
-                    throw "Existing companion file differs: $name. Uninstall or back up the old App folder first."
+                    $earlier = $previousManifest -and $previousManifest.files -and $previousManifest.files.$name -and
+                        ((Get-Hash $existing) -eq ([string]$previousManifest.files.$name).ToLowerInvariant())
+                    if (-not $earlier) { throw "Existing companion file was changed: $name. Back up the App folder, run Uninstall.cmd, then Install.cmd again." }
                 }
             }
         }
@@ -91,6 +114,13 @@ try {
         }
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Destination (Join-Path $app 'manifest.json') -Force
         @{ game_path = $GamePath; version = $manifest.version } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $app 'config.json') -Encoding UTF8
+        if ($replacePack) {
+            # Copy beside it, verify, then swap, so a failed copy keeps the old pack.
+            $incoming = $target + '.new'
+            Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'jaws_access.pack') -Destination $incoming -Force
+            if ((Get-Hash $incoming) -ne $manifest.files.'jaws_access.pack') { Remove-Item -LiteralPath $incoming; throw 'Copy verification failed: jaws_access.pack' }
+            Move-Item -LiteralPath $incoming -Destination $target -Force
+        }
         if (-not (Test-Path -LiteralPath $target)) {
             $sourceStream = [IO.File]::OpenRead((Join-Path $PSScriptRoot 'jaws_access.pack'))
             try {
@@ -118,6 +148,10 @@ try {
                 $shortcut.Save()
             } catch { Write-Host 'Desktop shortcut unavailable; use Start Pilot.cmd in the installed App folder.' }
         }
+        $shownVersion = ([string]$manifest.version).Split('-')[0]
+        $previousVersion = $(if ($previous -and $previous.version) { ([string]$previous.version).Split('-')[0] } else { '' })
+        if ($previousVersion -and $previousVersion -ne $shownVersion) { Write-Host "Upgraded from version $previousVersion to $shownVersion." }
+        else { Write-Host "Installed version $shownVersion." }
         Write-Host "Installed: $app"
         $readerName = $(if ($manifest.screen_reader -eq 'NVDA') { 'NVDA' } else { 'JAWS' })
         Write-Host ("Start $readerName and Steam, then run the desktop shortcut (or Start Pilot.cmd). It tests $readerName and starts the game with the accessibility mod; no Mod Manager is needed.")

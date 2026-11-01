@@ -1,6 +1,8 @@
 # Install a built automation-preview ZIP over the current install, keeping a
 # full backup of the previous App folder, logs and pack under work/.
-param([Parameter(Mandatory=$true)][string]$Version)  # e.g. 0.6.18
+# -Upgrade runs the shipped installer the way a player does (no uninstall
+# first, game folder found by the installer), to test upgrading in place.
+param([Parameter(Mandatory=$true)][string]$Version, [switch]$Upgrade)  # e.g. 0.6.18
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $base = Join-Path $env:LOCALAPPDATA 'JawsWarhammer2'
@@ -22,9 +24,13 @@ foreach ($name in @('receipt.json','bridge.jsonl','native-ui-graphics-preview.lo
 Copy-Item -LiteralPath (Join-Path $gamePath 'data\jaws_access.pack') -Destination (Join-Path $backup 'jaws_access.pack')
 $package = Join-Path $backup 'package'
 Expand-Archive -LiteralPath $zip -DestinationPath $package
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $backup 'App\Uninstall.ps1')
-if ($LASTEXITCODE) { throw "Uninstall failed; backup preserved at $backup" }
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package "warhammer2-windows-$full\Install.ps1") -GamePath $gamePath
+if ($Upgrade) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package "warhammer2-windows-$full\Install.ps1")
+} else {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $backup 'App\Uninstall.ps1')
+    if ($LASTEXITCODE) { throw "Uninstall failed; backup preserved at $backup" }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package "warhammer2-windows-$full\Install.ps1") -GamePath $gamePath
+}
 if ($LASTEXITCODE) { throw "Install failed; backup preserved at $backup" }
 $manifest = Get-Content -LiteralPath (Join-Path $base 'App\manifest.json') -Raw | ConvertFrom-Json
 if ($manifest.version -ne $full) { throw "Wrong installed version: $($manifest.version)" }

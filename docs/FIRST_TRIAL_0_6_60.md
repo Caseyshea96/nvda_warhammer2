@@ -153,6 +153,54 @@ check box (on screen: unchecked) → Enter on Start Campaign: "Start the campaig
 as Tyrion, High Elves, Eataine? Press Enter again to start." → Down cancelled
 it. No campaign started; dispatches were New Campaign and Continue only.
 
+## 0.6.63: trial run 2 — the update never installed
+
+Trial run 2 on the friend's PC (given 0.6.62) reported the trial-1 messages
+word for word: New Campaign "Could not verify this screen. Press F2 and try
+again.", Continue Campaign "Not supported yet." Neither can come from 0.6.60
+or later: on the main menu Enter goes to `activate_player_target`, which never
+says "Could not verify", and Continue Campaign is an allowed target. His game
+was still running 0.6.59.
+
+Cause: `packaging/pilot/Install.ps1` refused to replace any `jaws_access.pack`
+whose checksum differed from the new one ("A different jaws_access.pack
+exists…"), and any App file that differed. Every earlier version differs, so
+installing a new ZIP over the old one always failed and left the old build in
+place; the guide said "INSTALL (once)" and did not say to uninstall first.
+Live tests here never saw it because `Install-Build.ps1` uninstalls first.
+
+Changes:
+
+- The installer upgrades its own earlier install in place: the old pack must
+  match `receipt.json` (same game folder), each old App file must match the
+  old `App\manifest.json`. A pack or file it did not install, or one changed
+  since, is still refused (message says what to do). The new pack is copied
+  beside the old one, verified, then swapped. It prints "Upgraded from version
+  X to Y." (or "Installed version Y.").
+- The spoken ready message carries the version: "Warhammer accessibility
+  0.6.63 ready. Arrow keys move, Enter activates." so a tester can tell which
+  build runs. Guide: "INSTALL OR UPDATE", correct shortcut name ("Warhammer
+  NVDA Pilot"), ask to mention the number in feedback.
+- `tests/check_installer.py`: upgrade over a faked older install (pack and
+  companion replaced, no leftover `.new`, receipt updated, other packs kept);
+  a receipt for another game folder and a hand-edited old companion are
+  refused with the old pack kept.
+- `tools/live/Install-Build.ps1 -Upgrade` runs the shipped installer the
+  player's way (no uninstall, game folder auto-detected).
+
+Live (`work/live-0.6.63-upgrade`): `Install-Build -Version 0.6.63 -Upgrade`
+over the installed 0.6.62 in Program Files: "Upgraded from version 0.6.62 to
+0.6.63.", pack hash checked, backup `work/preinstall-0.6.63-a65cdddb`. Then the
+player launch (`Test-PlayerLaunch`, NVDA not running so speech from
+speech-trace.jsonl; game `Warhammer2.exe nvda_mods.txt ; -dx11`): "Warhammer
+accessibility 0.6.63 ready. Arrow keys move, Enter activates." ~95 s after
+launch with the menu on screen → Down: "Main menu. New Campaign, button, 1 of
+22" → Enter: "New Campaign activated." → Down: "Select Campaign. The Eye of
+the Vortex, radio button, checked, 1 of 17". Owned game and companion closed.
+
+For the friend: run the 0.6.63 ZIP's Install.cmd (it replaces 0.6.59 in place;
+no uninstall needed), then the desktop shortcut. "ready" should say 0.6.63.
+
 Still per-PC: the named-field labels ("Selected lord:", "Race:", "Faction:",
 difficulties) and the start prompt's names use fixed paths; if a PC's layout
 shifts them, items are still read but without those prefixes, and the prompt

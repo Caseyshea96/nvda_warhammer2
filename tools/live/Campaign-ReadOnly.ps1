@@ -34,7 +34,7 @@ function Read-Status($Lease) {
         if (([datetime]::UtcNow - [IO.File]::GetLastWriteTimeUtc($path)).TotalSeconds -gt 4) { return $null }
         $s=$raw | ConvertFrom-Json
         if ($s.expires -is [datetime]) { $s.expires=$s.expires.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
-        if ($s.protocol -ne 'WH2CAMSTATUS1' -or $s.version -ne '0.6.62' -or $s.owner -cne $Lease.owner -or $s.expires -cne $Lease.expires -or
+        if ($s.protocol -ne 'WH2CAMSTATUS1' -or $s.version -ne '0.6.63' -or $s.owner -cne $Lease.owner -or $s.expires -cne $Lease.expires -or
             $s.session -isnot [string] -or -not $s.session.StartsWith(('campaign:'+$Lease.owner+':')) -or $s.session.Length -gt 200 -or $s.session -match '[\t\r\n]') { return $null }
         if ($s.generation -isnot [int] -and $s.generation -isnot [long]) { return $null }
         if ($s.generation -lt 1 -or $s.generation -gt 16777215 -or $s.phase -notin @('initialising','waiting','waiting-timeout','scanning','ready','limited','cancelled','error')) { return $null }

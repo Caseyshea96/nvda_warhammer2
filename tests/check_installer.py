@@ -77,6 +77,49 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         assert (app / name).is_file(), f'Missing installed runtime payload: {name}'
         assert hashlib.sha256((app / name).read_bytes()).hexdigest() == digest
     install()  # Idempotent same-version install.
+    # Upgrade over an earlier version this installer put there (trial run 2:
+    # the friend's 0.6.62 install refused to replace 0.6.59 and the old build
+    # kept running). Fake an older install: different pack and companion,
+    # recorded in the receipt and the installed manifest.
+    receipt_path = base / 'receipt.json'
+    installed_manifest_path = app / 'manifest.json'
+    new_pack = target.read_bytes()
+    companion = app / 'Companion.ps1'
+    new_companion = companion.read_bytes()
+
+    def fake_older(pack_game=None, companion_bytes=b'# older companion\n', record_companion=True):
+        target.write_bytes(b'older pack build')
+        companion.write_bytes(companion_bytes)
+        receipt = json.loads(receipt_path.read_text(encoding='utf-8-sig'))
+        receipt['version'] = '0.6.59-nvda-automation-preview'
+        receipt['pack_sha256'] = hashlib.sha256(b'older pack build').hexdigest()
+        receipt['game_path'] = pack_game or str(game)
+        receipt_path.write_text(json.dumps(receipt), encoding='utf-8')
+        old_manifest = json.loads(installed_manifest_path.read_text(encoding='utf-8-sig'))
+        old_manifest['version'] = '0.6.59-nvda-automation-preview'
+        if record_companion:
+            old_manifest['files']['Companion.ps1'] = hashlib.sha256(companion_bytes).hexdigest()
+        installed_manifest_path.write_text(json.dumps(old_manifest), encoding='utf-8')
+
+    fake_older()
+    upgraded = install()
+    assert target.read_bytes() == new_pack and companion.read_bytes() == new_companion
+    assert 'Upgraded from version 0.6.59 to ' + manifest['version'].split('-')[0] in upgraded.stdout, upgraded.stdout
+    assert not (game / 'data/jaws_access.pack.new').exists()
+    assert json.loads(receipt_path.read_text(encoding='utf-8-sig'))['version'] == manifest['version']
+    assert (game / 'data/unrelated.pack').read_bytes() == b'preserve this'
+    # A receipt for another game folder does not vouch for this pack.
+    fake_older(pack_game=str(folder))
+    install(success=False)
+    assert target.read_bytes() == b'older pack build'
+    # An older companion changed by hand (not the recorded hash) is kept, and so is the old pack.
+    fake_older(record_companion=False, companion_bytes=b'# hand-edited\n')
+    install(success=False)
+    assert companion.read_bytes() == b'# hand-edited\n' and target.read_bytes() == b'older pack build'
+    # Restore the current install for the remaining checks.
+    fake_older()
+    install()
+    assert target.read_bytes() == new_pack and companion.read_bytes() == new_companion
     # A modified companion is preserved rather than silently overwritten.
     companion = app / 'Companion.ps1'
     original = companion.read_bytes()
@@ -119,4 +162,4 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         run(app / 'Uninstall.ps1')
         assert automation.read_bytes() == modified, 'Changed automation helper must be preserved'
         assert (game / 'save.txt').read_text() == 'preserve save'
-print('PASS: shipped ZIP install, non-default path with spaces, idempotence, old-probe backup, mismatch refusal, tamper detection, uninstall and preservation')
+print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, old-probe backup, mismatch refusal, tamper detection, uninstall and preservation')

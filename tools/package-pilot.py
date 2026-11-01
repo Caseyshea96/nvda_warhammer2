@@ -11,7 +11,7 @@ interactive_nvda = "--interactive-nvda" in sys.argv or graphics_preview
 if diagnostic and interactive_nvda:
     raise SystemExit('Choose diagnostic or interactive NVDA, not both')
 nvda = diagnostic or interactive_nvda
-version = "0.6.62-nvda-automation-preview" if graphics_preview else "0.5.3-nvda-scanner-compare" if scanner_compare else "0.4.3-nvda-diagnostic" if diagnostic else ("0.5.2-nvda-preview" if interactive_nvda else "0.2.5-dev")
+version = "0.6.63-nvda-automation-preview" if graphics_preview else "0.5.3-nvda-scanner-compare" if scanner_compare else "0.4.3-nvda-diagnostic" if diagnostic else ("0.5.2-nvda-preview" if interactive_nvda else "0.2.5-dev")
 pack_name = "jaws_access_graphics_preview.pack" if graphics_preview else "jaws_access_scanner_compare.pack" if scanner_compare else "jaws_access_diagnostic.pack" if diagnostic else ("jaws_access_interactive.pack" if interactive_nvda else "jaws_access.pack")
 
 root = Path(__file__).resolve().parents[1]

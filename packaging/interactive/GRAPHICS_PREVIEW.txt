@@ -10,12 +10,14 @@ Items are spoken the way NVDA reads any program: name, role, value, states,
 then position, for example "Recruit Lord, button, 53 of 106".
 
 ------------------------------------------------------------------------
-INSTALL (once)
-1. Close the game. Extract the whole ZIP to a folder.
+INSTALL OR UPDATE
+1. Close the game and the helper. Extract the whole ZIP to a folder.
 2. Run Install.cmd. It finds the Steam game folder (or asks for the folder
    containing Warhammer2.exe), copies jaws_access.pack into the game's data
    folder and the helper into %LOCALAPPDATA%\JawsWarhammer2\App. It makes a
-   desktop shortcut "Warhammer JAWS Pilot".
+   desktop shortcut "Warhammer NVDA Pilot". For a new version, run the new
+   ZIP's Install.cmd: it replaces the earlier version and says "Upgraded
+   from version ... to ...". No need to uninstall first.
 3. Install warhammer2-quiet-mode-0.1.0.nvda-addon (in the App folder) into
    NVDA and restart NVDA. It keeps NVDA quiet while the game has focus, so
    only the mod's speech is heard.
@@ -30,7 +32,8 @@ EACH TIME YOU PLAY
    loaded in this mode. The intro movies play first, about two minutes
    (Escape skips them); the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.63 ready. Arrow keys move, Enter activates."
+   The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure jaws_access is ticked, then press Play.
 
