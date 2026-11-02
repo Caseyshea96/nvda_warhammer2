@@ -170,3 +170,14 @@ Owner request: "have it pull the latest update from GitHub". The repo
 - The checksum guards against a broken download, not against someone who can
   publish releases on the repo: anyone with write access to it can ship code
   to players.
+
+Published (owner's go-ahead, Nov 1): release **v0.6.69**
+(https://github.com/Caseyshea96/nvda_warhammer2/releases/tag/v0.6.69, ZIP +
+`.sha256`). Real download test on this PC: with 0.6.68 installed, the 0.6.69
+`Update.ps1` said "Checking GitHub for the newest version." "Downloading
+version 0.6.69." "Updating from version 0.6.68 to 0.6.69." and the installer
+"Upgraded from version 0.6.68 to 0.6.69."; the installed shortcut then says
+"Version 0.6.69 is installed; the newest release is 0.6.69. Nothing to
+update." `Publish-Release.ps1` needed three fixes on Windows PowerShell 5.1
+first (multi-line notes, gh's "release not found" on stderr, quotes in
+arguments): notes now go to gh through a file (`-NotesFile`).
