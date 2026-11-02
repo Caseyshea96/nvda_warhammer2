@@ -213,3 +213,8 @@ Harness: 415 frontend, 56 campaign scenarios; installer checks cover asking
 before a saved ZIP and uninstall with the helper running. Live
 (`work/live-0.6.70-review`): main menu → Continue Campaign → F6 → F7 →
 Lothern ("arrived") → F6 to the settlement; reader alive; saves unchanged.
+Published (owner, Nov 1): release **v0.6.70**
+(https://github.com/Caseyshea96/nvda_warhammer2/releases/tag/v0.6.70). Real
+update test: with 0.6.69 installed, its own Update shortcut script downloaded
+0.6.70 from GitHub, checked the checksum and "Upgraded from version 0.6.69 to
+0.6.70."; run again it says "Nothing to update."
