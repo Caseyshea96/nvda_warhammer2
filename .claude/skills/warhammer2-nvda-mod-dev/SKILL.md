@@ -76,7 +76,7 @@ After camera or selection changes (campaign load, a list-row click, an army ente
 2. `CLAUDE.md`: the "Current state" line, the rollback, any new rule or unblock (with date and owner's words).
 3. Player-facing change: `packaging/interactive/GRAPHICS_PREVIEW.txt` (the ZIP's README).
 4. Commit your files; push to `main` after the live test (owner practice: every version pushed). Send the ZIP with SendUserFile.
-5. Players update from the latest GitHub release ("Warhammer NVDA Update" shortcut, `packaging/pilot/Update.ps1`). Publishing is public: run `powershell -File tools/Publish-Release.ps1 -Version <ver> -Notes "<short notes>"` only when the owner says this version should go out (it uploads the ZIP and .sha256; Update.ps1 refuses a ZIP without a matching checksum).
+5. Players update from the latest GitHub release ("Warhammer NVDA Update" shortcut, `packaging/pilot/Update.ps1`). Publishing is public: run `powershell -File tools/Publish-Release.ps1 -Version <ver> -NotesFile <notes.md>` (or `-Notes "<one line>"`) only when the owner says this version should go out (it uploads the ZIP and .sha256; Update.ps1 refuses a ZIP without a matching checksum).
 6. Leave 0.6.x installed as tested; no owned game or companion running; flags you set (e.g. `campaign-reader-off.flag`) removed.
 
 ## 7. Report

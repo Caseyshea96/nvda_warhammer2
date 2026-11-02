@@ -2,11 +2,14 @@
 # NVDA Update" shortcut downloads it. Uploads the ZIP and its .sha256 file
 # (Update.ps1 refuses a ZIP without a matching checksum).
 #   powershell -File tools/Publish-Release.ps1 -Version 0.6.69 -Notes "What changed"
+#   powershell -File tools/Publish-Release.ps1 -Version 0.6.69 -NotesFile notes.md   (several lines)
 # Refuses unless: the ZIP and checksum exist and match, the version is the one
 # in source, HEAD is pushed to origin/main, and the tag does not exist yet.
 # Publishing is public: run it only when the owner wants this version out.
-param([Parameter(Mandatory=$true)][string]$Version, [Parameter(Mandatory=$true)][string]$Notes)
+param([Parameter(Mandatory=$true)][string]$Version, [string]$Notes, [string]$NotesFile)
 $ErrorActionPreference = 'Stop'
+if ($NotesFile) { $Notes = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $NotesFile).Path) }
+if (-not $Notes) { throw 'Give -Notes "..." or -NotesFile <file>.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $name = "warhammer2-windows-$Version-nvda-automation-preview.zip"
 $zip = Join-Path $repo "artifacts\$name"
