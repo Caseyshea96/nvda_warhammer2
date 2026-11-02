@@ -24,8 +24,13 @@ try {
     git fetch -q origin main
     if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) { throw 'HEAD is not pushed to origin/main; push first.' }
     if (git tag --list "v$Version") { throw "Tag v$Version already exists." }
-    $existing = gh release view "v$Version" 2>$null
-    if ($LASTEXITCODE -eq 0) { throw "Release v$Version already exists." }
+    # "release not found" on stderr is the expected answer; Windows PowerShell
+    # would turn it into a terminating error under 'Stop'.
+    $ErrorActionPreference = 'Continue'
+    gh release view "v$Version" *> $null
+    $viewed = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($viewed -eq 0) { throw "Release v$Version already exists." }
     gh release create "v$Version" $zip $sha --title "Warhammer accessibility $Version" --notes $Notes --target (git rev-parse HEAD) --latest
     if ($LASTEXITCODE) { throw 'gh release create failed.' }
     gh release view "v$Version" --json url,assets --jq '.url, (.assets[].name)'
