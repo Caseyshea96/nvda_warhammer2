@@ -31,7 +31,12 @@ try {
     $viewed = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($viewed -eq 0) { throw "Release v$Version already exists." }
-    gh release create "v$Version" $zip $sha --title "Warhammer accessibility $Version" --notes $Notes --target (git rev-parse HEAD) --latest
-    if ($LASTEXITCODE) { throw 'gh release create failed.' }
+    # Notes go through a file: Windows PowerShell mangles quotes in arguments.
+    $notesPath = Join-Path ([IO.Path]::GetTempPath()) ('release-notes-' + [guid]::NewGuid().ToString('N') + '.md')
+    [IO.File]::WriteAllText($notesPath, $Notes, (New-Object Text.UTF8Encoding $false))
+    try {
+        gh release create "v$Version" $zip $sha --title "Warhammer accessibility $Version" --notes-file $notesPath --target (git rev-parse HEAD) --latest
+        if ($LASTEXITCODE) { throw 'gh release create failed.' }
+    } finally { Remove-Item -LiteralPath $notesPath -ErrorAction SilentlyContinue }
     gh release view "v$Version" --json url,assets --jq '.url, (.assets[].name)'
 } finally { Pop-Location }
