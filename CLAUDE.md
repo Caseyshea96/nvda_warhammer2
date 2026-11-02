@@ -29,7 +29,7 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 ## Current state — read before working
 
 - `docs/AUTOMATION_SESSION.md` — full session history and current stop point.
-- `docs/MOVES_0_6_67.md` — latest (0.6.69: the Update shortcut downloads the latest GitHub release, checksum checked, offline fallback to a saved ZIP; publish with `tools/Publish-Release.ps1` only when the owner wants a version out. 0.6.68 section: review fixes, F6 to settlement fixed, companion keeps keys 15 s in stalls, one-step update via the "Warhammer NVDA Update" shortcut / `Update.ps1`): F6 lord/settlement, Shift+F6 next lord, F7 move list (movement unblocked Nov 1; attacks not); model reads and orders only in one repeating game-timer job queue; the freeze / silent reader is pre-existing (0.6.66 too) and frequent.
+- `docs/MOVES_0_6_67.md` — latest (0.6.70: review fixes — campaign session ID with clock, only key answers interrupt speech, Update asks before a saved ZIP, main-menu tooltip/browser, rows in list sections, uninstall closes the helper, stale-generation keys. 0.6.69: the Update shortcut downloads the latest GitHub release, checksum checked, offline fallback to a saved ZIP; publish with `tools/Publish-Release.ps1` only when the owner wants a version out. 0.6.68 section: review fixes, F6 to settlement fixed, companion keeps keys 15 s in stalls, one-step update via the "Warhammer NVDA Update" shortcut / `Update.ps1`): F6 lord/settlement, Shift+F6 next lord, F7 move list (movement unblocked Nov 1; attacks not); model reads and orders only in one repeating game-timer job queue; the freeze / silent reader is pre-existing (0.6.66 too) and frequent.
 - `docs/TRIAL_3_0_6_64.md` — (also 0.6.65: NVDA only, new names `warhammer_access.pack` / `WarhammerAccess`, migration; 0.6.66: Load Game, saves from before 0.6.65 load only by Continue): Select Lord as steps (race, lord, setup) with Backspace, difficulty lists, Mortal Empires, intro-movie notices, menu key timer now one repeating timer, Select Campaign after Select Lord, log restart.
 - `docs/FIRST_TRIAL_0_6_60.md` — first outside trial fixes (main menu on other PCs, Continue Campaign, launch without TW Mod Manager, HUD reading on by default; accepted 0.6.60) 0.6.61: "ready" waits for the menu after the intro movies; 0.6.62: Select Lord without exact layout checks; 0.6.63: the installer upgrades in place (trial 2 ran the old build) and "ready" says the version.
 - `docs/SETTLEMENTS_0_6_43.md` — provinces, settlement panel, building and recruiting by keyboard, intro check box, player guide, armies read, silent-reader fix, document reading order and province/unit figures (accepted 0.6.59).
@@ -197,7 +197,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.69; before it 0.6.68) as the rollback.
+- Preserve the last known working build (0.6.70; before it 0.6.69) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.

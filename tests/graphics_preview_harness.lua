@@ -207,6 +207,9 @@ key('script_F2'); assert(says('New Campaign','1 of 22'))
 key('script_F3'); assert(says('Quit','22 of 22'))
 key('script_F2'); assert(says('New Campaign','1 of 22'))
 key('script_F2'); assert(says('Continue Campaign, button, unavailable'))
+-- The news browser showing above the menu does not reset the focus to item 1.
+nodes['tree.child4'].data.Visible=true; key('script_F2'); assert(says('3 of 22'),last())
+key('script_F3'); assert(says('Continue Campaign','2 of 22'),last()); nodes['tree.child4'].data.Visible=false
 assert(contents('native-ui-graphics-preview.log'):find('tree.nodes\tnumber\t86',1,true))
 -- Browsing is cached; a second F2 does not rescan or change the native read order.
 local _, captures = contents('native-ui-graphics-preview.log'):gsub('capture.COMPLETE','')
@@ -1274,7 +1277,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.69 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.70 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1470,7 +1473,13 @@ send_keys('companion-a',{'letter:q'}); assert(says('Quest Battle, button'),'Firs
 local before=spoken()
 send_keys('companion-a',{'letter:z'}); assert(spoken()==before,'No match stays silent')
 send_keys('companion-a',{'next'},'another-session'); assert(spoken()==before,'Other session ignored')
-send_keys('companion-a',{'next'},nil,'99'); assert(spoken()==before,'Other UI generation ignored')
+-- Keys sent just before a screen change (older UI generation): moving still
+-- reads the new screen; Enter is not applied to a screen not yet heard.
+send_keys('companion-a',{'next'},nil,'99'); assert(spoken()~=before,'A stale Down still moves')
+local dispatched=#dispatches
+send_keys('companion-a',{'activate'},nil,'99')
+assert(spoken()=='The screen changed. Press again.' and #dispatches==dispatched,'A stale Enter clicks nothing and says so')
+send_keys('companion-a',{'letter:z'}); before=spoken()
 send_keys('companion-a',{'bogus','letter:1'}); assert(spoken()==before)
 assert(contents('native-ui-graphics-preview.log'):find('keys.rejected\tstring\taction',1,true))
 send_keys('companion-b',{'next'}); assert(spoken()==before,'A restarted companion starts fresh')

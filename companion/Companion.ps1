@@ -99,17 +99,20 @@ try {
             return $false
         }
     }
-    function Speak([string]$Text, [switch]$Force) {
+    # Interrupt: speech that answers a key press cuts off what was being said,
+    # as a screen reader does when focus moves; anything else (a notification,
+    # "arrived at ...") waits its turn, so it never cuts off a result.
+    function Speak([string]$Text, [switch]$Force, [bool]$Interrupt = $true) {
         $script:SpeechRequestId++
         Write-SpeechTrace 'request' @{ text = $Text; characters = $Text.Length; reader = 'Nvda';
-            muted = [bool]$script:Muted; forced = [bool]$Force; connected = [bool]$script:NvdaConnected }
+            muted = [bool]$script:Muted; forced = [bool]$Force; connected = [bool]$script:NvdaConnected; interrupt = $Interrupt }
         $script:Last = $Text
         if ($Console) { Write-Output $Text; return }
         if ($script:Muted -and -not $Force) { return }
         if (-not $script:NvdaConnected) { return }
         try {
-            $code = [WarhammerAccessibility.NvdaController]::Speak($Text, $true)
-            Write-SpeechTrace 'nvda-return' @{ code = $code; interrupt_previous = $true }
+            $code = [WarhammerAccessibility.NvdaController]::Speak($Text, $Interrupt)
+            Write-SpeechTrace 'nvda-return' @{ code = $code; interrupt_previous = $Interrupt }
             if ($code -ne 0) { throw [ComponentModel.Win32Exception]::new($code) }
             $brailleCode = [WarhammerAccessibility.NvdaController]::Braille($Text)
             if ($brailleCode -ne 0) { Log-Error ('NVDA braille output failed: ' + $brailleCode) }
@@ -182,6 +185,7 @@ try {
     $script:KeyRing = New-Object System.Collections.Generic.List[string]
     $script:Reader = $null
     $script:LastMenuKeyFailures = 0
+    $script:KeyPending = $false # a key was sent since the last speech
     function Write-AtomicText([string]$Path, [string]$Text) {
         $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
         try {
@@ -213,6 +217,7 @@ try {
     function Send-MenuKey([string]$Action) {
         if (-not $script:Reader) { return }
         $script:KeySeq++
+        $script:KeyPending = $true
         $script:KeyRing.Add(([string]$script:KeySeq) + "`t" + $Action)
         while ($script:KeyRing.Count -gt 16) { $script:KeyRing.RemoveAt(0) }
         Write-MenuKeys
@@ -239,7 +244,8 @@ try {
         if ($latest) {
             Set-Status ('Connected to game: ' + $latest.context + '. Last message: ' + $latest.text.Substring(0, [Math]::Min(100, $latest.text.Length)))
             if ($batch.Dropped) { Log-Error ("Speech batch overflow: " + $batch.Dropped + " records; original messages remain in the bridge file.") }
-            Speak (Get-SpeechBatchText $batch)
+            Speak (Get-SpeechBatchText $batch) -Interrupt $script:KeyPending
+            $script:KeyPending = $false
         }
     }
     if ($Console) {

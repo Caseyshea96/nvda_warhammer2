@@ -181,3 +181,35 @@ version 0.6.69." "Updating from version 0.6.68 to 0.6.69." and the installer
 update." `Publish-Release.ps1` needed three fixes on Windows PowerShell 5.1
 first (multi-line notes, gh's "release not found" on stderr, quotes in
 arguments): notes now go to gh through a file (`-NotesFile`).
+
+## 0.6.70 — comprehensive review fixes (November 1, 2026)
+
+A max-effort review of all shipped code (both readers, companion,
+installer/updater) found 9 problems; all fixed:
+- **Campaign session ID** now ends with the game clock
+  (`campaign:player:table: …:49.18`). Without it a later campaign load in
+  the same game could repeat a retired session ID, and the companion would
+  drop all of its speech.
+- **Speech interruption:** only speech that answers a key press interrupts
+  NVDA; notifications and unsolicited results queue. Live: "Moving to
+  Lothern." interrupt=True, "Research available" and "Tyrion arrived at
+  Lothern." interrupt=False (before, the notification cut off the result).
+  `tests/companion_interrupt_tests.ps1` (runs in the build).
+- **Update offline fallback** asks before installing a ZIP found in
+  Downloads/Desktop (not checked like a GitHub download); Enter alone
+  cancels. `-Yes` for tests.
+- **Main menu:** a visible hover tooltip or the news browser above the menu
+  no longer resets the focus to item 1 on every key (as on Select Campaign
+  in 0.6.64); an unreadable layer does not either (activation still refuses).
+- **Lord and province rows** are found anywhere in their list panel (lists
+  can hold sections), with no 64-row limit (find_named looks at 64 children).
+- **F7 fallback** remembers only the player's own lords (an enemy army or
+  hero selected afterwards no longer replaces it).
+- **Uninstall** closes a running helper first, as Install does.
+- **Keys sent just before a menu screen change** (older UI generation): Down,
+  Up, Home, End and letters still work (they read the new screen); Enter and
+  Backspace say "The screen changed. Press again." instead of nothing.
+Harness: 415 frontend, 56 campaign scenarios; installer checks cover asking
+before a saved ZIP and uninstall with the helper running. Live
+(`work/live-0.6.70-review`): main menu → Continue Campaign → F6 → F7 →
+Lothern ("arrived") → F6 to the settlement; reader alive; saves unchanged.

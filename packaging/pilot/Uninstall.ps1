@@ -2,6 +2,18 @@ $ErrorActionPreference = 'Stop'
 try {
     if (Get-Process -Name 'Warhammer2' -ErrorAction SilentlyContinue) { throw 'Close Warhammer II first.' }
     $base = Join-Path $env:LOCALAPPDATA 'WarhammerAccess'
+    # Close the accessibility helper if it is running (it holds the lock).
+    $helpers = @()
+    try {
+        $helpers = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop | Where-Object {
+            $_.CommandLine -and $_.CommandLine.IndexOf((Join-Path $base 'App\Companion.ps1'), [StringComparison]::OrdinalIgnoreCase) -ge 0 })
+    } catch { }
+    if ($helpers.Count) {
+        Write-Host 'Closing the accessibility helper.'
+        foreach ($helper in $helpers) { Stop-Process -Id $helper.ProcessId -Force -ErrorAction SilentlyContinue }
+        $until = (Get-Date).AddSeconds(5)
+        while ((Get-Date) -lt $until -and @($helpers | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }).Count) { Start-Sleep -Milliseconds 200 }
+    }
     $lock = [IO.File]::Open((Join-Path $base 'companion.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
     try {
         $receipt = Get-Content -LiteralPath (Join-Path $base 'receipt.json') -Raw | ConvertFrom-Json

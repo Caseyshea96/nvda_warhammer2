@@ -4,9 +4,10 @@
 # folder and runs its installer (which checks every file, closes the helper
 # and upgrades in place). Without internet (or with -Offline) it uses the
 # newest warhammer2-windows-<version>-nvda-automation-preview.zip saved in
-# Downloads or on the Desktop. -Zip picks a file. -Folder, -ApiBase,
-# -GamePath and -NoShortcut are for tests.
-param([string]$Zip, [string[]]$Folder, [string]$GamePath, [switch]$NoShortcut, [switch]$Offline,
+# Downloads or on the Desktop, after asking (it is not checked the way a
+# GitHub download is). -Zip picks a file. -Yes answers the question; -Folder,
+# -ApiBase, -GamePath and -NoShortcut are for tests.
+param([string]$Zip, [string[]]$Folder, [string]$GamePath, [switch]$NoShortcut, [switch]$Offline, [switch]$Yes,
     [string]$Repository = 'Caseyshea96/nvda_warhammer2', [string]$ApiBase = 'https://api.github.com')
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue' # the progress bar makes downloads very slow in Windows PowerShell
@@ -89,6 +90,11 @@ try {
         if ($installed -and $version -le $installed) {
             Write-Host "Version $installed is installed; the newest download is $version. Nothing to update."
             exit 0
+        }
+        # Not from GitHub, so not checked against a published checksum: ask.
+        if (-not $Yes) {
+            $answer = Read-Host ("Install version $version from " + $chosen + '? Type Y and press Enter to install, or just press Enter to cancel')
+            if ([string]$answer -notmatch '^\s*[Yy]') { Write-Host 'Update cancelled.'; exit 1 }
         }
     }
     Write-Host ($(if ($installed) { "Updating from version $installed to $version." } else { "Installing version $version." }))

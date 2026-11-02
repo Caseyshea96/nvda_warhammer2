@@ -28,8 +28,10 @@ end
 local initial,owner,expiry,mode=read_flag()
 local diagnostic=initial~=nil
 if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player' end
-local session='campaign:' .. owner .. ':' .. tostring({})
-local version='0.6.69'
+-- os.clock makes it unique: the companion drops speech from a retired
+-- session, and a table address alone can repeat in a later campaign load.
+local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
+local version='0.6.70'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -1042,6 +1044,32 @@ local function ui_path(names)
 end
 local function shown(node) local ok,value=read(function() local v=node:Visible(); return v end); return ok and value==true end
 local function row_name(text) return type(text)=='string' and clean(text) or '' end
+-- Every descendant (to max_depth) whose ID passes wanted: list rows can sit
+-- inside sections (Provinces: your / other provinces), and a long list has
+-- more rows than find_named looks at.
+local function find_rows(parent,wanted,max_depth)
+    local found,level,seen={},{parent},0
+    for _=1,max_depth do
+        local next_level={}
+        for _,node in ipairs(level) do
+            local _,count=read(function() local v=node:ChildCount(); return v end)
+            for i=0,math.min(type(count)=='number' and count or 0,512)-1 do
+                seen=seen+1
+                if seen>4000 then return found end
+                local _,address=read(function() local v=node:Find(i); return v end)
+                local ok,child=read(function() local v=UIComponent(address); return v end)
+                if ok and child then
+                    local _,id=read(function() local v=child:Id(); return v end)
+                    if type(id)=='string' and wanted(id) then found[#found+1]={row=child,id=id}
+                    else next_level[#next_level+1]=child end
+                end
+            end
+        end
+        level=next_level
+        if #level==0 then break end
+    end
+    return found
+end
 -- Clicks the target's row when its list is open: 'clicked', 'closed',
 -- 'missing' or 'ambiguous'. A lord's row is found by his full name; by his
 -- first name only when exactly one row has it (rows may show only that).
@@ -1052,24 +1080,18 @@ local function click_row(target)
     local full,short={},{}
     if target.kind=='settlement' then
         -- Province rows sit inside sections (your provinces, others) of the
-        -- list (live 0.6.68): find the row by its ID anywhere in the panel.
-        local id='row_entry_' .. tostring(target.province)
-        local row=find_named(panel,id,8)
-        if row then full[1]={row=row,id=id} end
-    end
-    local list=target.kind=='lord' and find_named(panel,'list_box',4) or nil
-    if target.kind=='lord' and not list then return 'missing' end
-    local _,count=read(function() local v=list and list:ChildCount(); return v end)
-    for i=0,math.min(type(count)=='number' and count or 0,256)-1 do
-        local _,address=read(function() local v=list:Find(i); return v end)
-        local ok,row=read(function() local v=UIComponent(address); return v end)
-        local _,id=read(function() local v=ok and row:Id(); return v end)
-        if type(id)=='string' and target.kind=='lord' and id:sub(1,14)=='character_row_' then
-            local label=find_named(row,'dy_character_name',3)
+        -- list (live 0.6.68): found by ID anywhere in the panel.
+        local wanted='row_entry_' .. tostring(target.province)
+        full=find_rows(panel,function(id) return id==wanted end,8)
+    else
+        -- Lord rows likewise, wherever they sit (lords and heroes may be in
+        -- sections, as provinces are).
+        for _,found in ipairs(find_rows(panel,function(id) return id:sub(1,14)=='character_row_' end,8)) do
+            local label=find_named(found.row,'dy_character_name',3)
             local _,text=read(function() local v=label and label:GetStateText(); return v end)
             text=row_name(text)
-            if text~='' and text==target.name then full[#full+1]={row=row,id=id}
-            elseif text~='' and text==target.short then short[#short+1]={row=row,id=id} end
+            if text~='' and text==target.name then full[#full+1]=found
+            elseif text~='' and text==target.short then short[#short+1]=found end
         end
     end
     local found
@@ -1578,7 +1600,14 @@ core:add_listener('warhammer_campaign_discovery_first_tick','FirstTickAfterWorld
         end
         -- The selection, for F6 / F7 (read from the game's own events).
         core:add_listener('warhammer_campaign_selection_character','CharacterSelected',true,function(context)
-            pcall(function() selected_cqi=context:character():cqi(); selected_region=nil; last_lord_cqi=selected_cqi end)
+            pcall(function()
+                local character=context:character()
+                selected_cqi=character:cqi(); selected_region=nil
+                -- The F7 fallback: only one of the player's lords with an army.
+                local game=campaign_game()
+                if game and character:faction():name()==game:get_local_faction_name(true)
+                    and character:character_type('general') and character:has_military_force() then last_lord_cqi=selected_cqi end
+            end)
         end,true)
         core:add_listener('warhammer_campaign_selection_settlement','SettlementSelected',true,function(context)
             pcall(function() selected_region=context:garrison_residence():region():name(); selected_cqi=nil end)

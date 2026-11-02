@@ -363,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.69-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.70-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -1441,13 +1441,21 @@ local function screen_still_current()
         local main_ok, main_same = observe('navigation.main.shell', function()
             local count = node:ChildCount()
             if count ~= root_reads.ChildCount.value then return false end
-            local browser_index = browse_snapshot.nodes['tree.child5'] and 5 or 4
-            local browser = UIComponent(node:Find(browser_index))
-            if browser:Id() ~= 'browser' or browser:Visible(true) ~= false then return false end
-            if browser_index == 5 then
-                local tooltip = UIComponent(node:Find(4))
-                if tooltip:Id() ~= 'Tooltip' or tooltip:Visible(true) ~= false
-                    or tooltip:IsInteractive() ~= false then return false end
+            -- Layers above the menu: a hover tooltip or the news browser may
+            -- show (as activation allows); any other visible layer is a new
+            -- screen. Requiring them hidden reset the focus to item 1 on
+            -- every key while a tooltip showed (as on Select Campaign, 0.6.64).
+            -- Index 3 is the menu's own frame (sp_frame), always visible.
+            -- An unreadable layer does not reset the focus either: activation
+            -- still refuses it (no_extra_panel).
+            for index = 4, count - 1 do
+                local readable, blocking = pcall(function()
+                    local extra = UIComponent(node:Find(index))
+                    local extra_id = extra:Id()
+                    return extra:Visible(true) ~= false and extra_id ~= 'Tooltip' and extra_id ~= 'browser'
+                        and not starts_with(extra_id, 'tooltip_')
+                end)
+                if readable and blocking then return false end
             end
             return true
         end)
@@ -2464,7 +2472,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.69-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.70-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2660,7 +2668,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.69 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.70 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end
@@ -2711,17 +2719,21 @@ poll_key_events = function()
         plain_log('keys.owner', 'companion connected; earlier events skipped')
         return
     end
-    if header[3] ~= session or header[4] ~= tostring(generation) then
-        if newest > keys_seq then keys_seq = newest; plain_log('keys.skipped', 'other session or UI generation') end
+    if header[3] ~= session then
+        if newest > keys_seq then keys_seq = newest; plain_log('keys.skipped', 'other session') end
         return
     end
+    local stale = header[4] ~= tostring(generation)
     table.sort(events, function(a, b) return a.seq < b.seq end)
     local handled = 0
     for _, event in ipairs(events) do
         if event.seq > keys_seq and handled < 8 then
             keys_seq = event.seq -- consumed before acting; never replayed
             handled = handled + 1
-            key_action(event.action)
+            if stale and (event.action == 'activate' or event.action == 'back') then
+                plain_log('keys.skipped', 'activation from the previous screen')
+                speak('The screen changed. Press again.')
+            else key_action(event.action) end
         end
     end
     if newest > keys_seq then keys_seq = newest; plain_log('keys.skipped', 'more than eight pending') end

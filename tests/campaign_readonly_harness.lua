@@ -784,6 +784,7 @@ do
         function char:action_points_remaining_percent() return self.ap end
         function char:in_settlement() return self.x==100 and self.y==100 end
         function char:has_region() return true end; function char:region() return self.region_now end
+        function char:faction() return hef end
         return char
     end
     local tyrion,cavill=lord(5,'names_tyrion',100,100),lord(9,'names_cavill',130,100)
@@ -795,6 +796,7 @@ do
     local model={world=function() return {region_manager=function() return {region_list=function() return list({far,vaul,tor,lothern}) end} end} end,
         character_can_reach_settlement=function(_,char,settlement) return reach[settlement]==true end}
     cm={is_multiplayer=function() return multiplayer end,get_local_faction=function() return hef end,is_local_players_turn=function() return true end,
+        get_local_faction_name=function() return 'hef' end,
         model=function() return model end,get_character_by_cqi=function(_,cqi) return cqi==5 and tyrion or cavill end,
         move_to=function(_,lookup,x,y,queue) orders[#orders+1]={lookup,x,y,queue} end}
     begin(); for n=1,12 do tick(1) end
@@ -883,6 +885,11 @@ do
     -- still lists moves for the last lord selected; F4 works in the list too.
     tyrion.ap=100; tyrion.x,tyrion.y=120,100
     fire('CharacterSelected',{character=function() return tyrion end})
+    -- An enemy army selected next does not replace him as the F7 fallback.
+    local enemy={}
+    function enemy:cqi() return 77 end; function enemy:faction() return def end
+    function enemy:character_type() return true end; function enemy:has_military_force() return true end
+    fire('CharacterSelected',{character=function() return enemy end})
     fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
     send('moves'); assert(heard('Move Tyrion, 100 percent movement, 2 of 4 places this turn.'),contents('bridge.jsonl'))
     fire('ShortcutTriggered',{string='script_F4'}); assert(said()=='Move Tyrion to Tor Elasor? Press Enter again to confirm.',said())
@@ -960,6 +967,71 @@ do
     local busy=select(2,contents('bridge.jsonl'):gsub('The game is busy%. Try again%.',''))
     send('moves')
     assert(select(2,contents('bridge.jsonl'):gsub('The game is busy%. Try again%.',''))==busy+1,'Seventeenth job: busy')
+end
+-- Rows inside sections: lords in a "Lords" section next to "Heroes", and a
+-- province beyond the 64th row (find_named looks at 64 children only).
+do
+    local make=start('campaign',nil,3)
+    nodes['tree.child0'].count=5
+    make('tree.child0.child3','radar_things',1)
+    make('tree.child0.child3.child0','dropdown_parent',2)
+    make('tree.child0.child3.child0.child0','units_dropdown',1)
+    local units_panel=make('tree.child0.child3.child0.child0.child0','panel',1,'',false)
+    make('tree.child0.child3.child0.child0.child0.child0','list_box',2)
+    make('tree.child0.child3.child0.child0.child0.child0.child0','section_lords',2)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child0','headers',0)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child1','list_box',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child1.child0','character_row_0',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child0.child1.child0.child0','dy_character_name',0,'Tyrion')
+    make('tree.child0.child3.child0.child0.child0.child0.child1','section_heroes',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child1.child0','list_box',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child1.child0.child0','character_row_1',1)
+    make('tree.child0.child3.child0.child0.child0.child0.child1.child0.child0.child0','dy_character_name',0,'Korhil')
+    make('tree.child0.child3.child0.child1','regions_dropdown',1)
+    local regions_panel=make('tree.child0.child3.child0.child1.child0','panel',1,'',false)
+    make('tree.child0.child3.child0.child1.child0.child0','list_box',1)
+    make('tree.child0.child3.child0.child1.child0.child0.child0','section',1)
+    make('tree.child0.child3.child0.child1.child0.child0.child0.child0','list_box',70)
+    for i=0,69 do make('tree.child0.child3.child0.child1.child0.child0.child0.child0.child' .. i,'row_entry_prov_' .. i,0) end
+    make('tree.child0.child4','bar_small_top',1)
+    make('tree.child0.child4.child0','tabs',2)
+    local tab_units=make('tree.child0.child4.child0.child0','tab_units',0)
+    local tab_regions=make('tree.child0.child4.child0.child1','tab_regions',0)
+    function tab_units:SimulateLClick() dispatches=dispatches+1; clicked=self.path; units_panel.visible=true; regions_panel.visible=false end
+    function tab_regions:SimulateLClick() dispatches=dispatches+1; clicked=self.path; regions_panel.visible=true; units_panel.visible=false end
+    local function list(items) return {num_items=function() return #items end,item_at=function(_,i) return items[i+1] end} end
+    local names={names_tyrion='Tyrion',regions_onscreen_far_city='Far City',provinces_onscreen_prov_69='Province Sixty-nine'}
+    effect={get_localised_string=function(key) return names[key] or '' end}
+    local hef={}; function hef:name() return 'hef' end
+    local settlement={}; function settlement:logical_position_x() return 300 end; function settlement:logical_position_y() return 300 end
+    local far_city={name=function() return 'far_city' end,province_name=function() return 'prov_69' end,settlement=function() return settlement end,
+        is_abandoned=function() return false end,owning_faction=function() return hef end}
+    local tyrion={}
+    function tyrion:cqi() return 5 end; function tyrion:get_forename() return 'names_tyrion' end; function tyrion:get_surname() return '' end
+    function tyrion:character_type(t) return t=='general' end; function tyrion:has_military_force() return true end
+    function tyrion:military_force() return {is_armed_citizenry=function() return false end,unit_list=function() return list({1}) end} end
+    function tyrion:logical_position_x() return 310 end; function tyrion:logical_position_y() return 300 end
+    function tyrion:action_points_remaining_percent() return 100 end
+    function tyrion:has_region() return true end; function tyrion:region() return far_city end
+    function hef:character_list() return list({tyrion}) end; function hef:faction_leader() return tyrion end
+    function hef:region_list() return list({far_city}) end
+    cm={is_multiplayer=function() return false end,get_local_faction=function() return hef end}
+    begin(); for n=1,12 do tick(1) end
+    local session=contents('reader-state.tsv'):match('^WH2READER1\t([^\t]+)\t')
+    assert(session:match(':[%d.]+$'),'The session ID ends with the game clock: ' .. session)
+    local seq=0
+    local function send(...)
+        local lines={'WH2KEYS1\tcompanion\t' .. session .. '\t1'}
+        for _,action in ipairs({...}) do seq=seq+1; lines[#lines+1]=seq .. '\t' .. action end
+        files[prefix .. 'keys.tsv']=table.concat(lines,'\n') .. '\n'
+        tick(1)
+    end
+    send('noop')
+    send('lords')
+    assert(clicked=='tree.child0.child3.child0.child0.child0.child0.child0.child1.child0','The lord row inside the Lords section: ' .. tostring(clicked))
+    send('lords')
+    assert(clicked=='tree.child0.child3.child0.child1.child0.child0.child0.child0.child69','Province row 70 is found: ' .. tostring(clicked))
+    assert(contents('bridge.jsonl'):find('Far City, Province Sixty-nine.',1,true),contents('bridge.jsonl'))
 end
 io=saved_io;os.date=saved_date
 print('PASS: ' .. scenarios .. ' campaign diagnostic scenarios; HUD readiness, scoped discovery, typed failures, capture protocol, replay/generation/lease guards, limits, cancellation and zero clicks')

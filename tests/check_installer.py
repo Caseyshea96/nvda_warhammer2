@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
     downloads = folder / 'Downloads'
     downloads.mkdir()
     def update(*extra, success=True):
-        return run(app / 'Update.ps1', '-Offline', '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut', *extra, success=success)
+        return run(app / 'Update.ps1', '-Offline', '-Yes', '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut', *extra, success=success)
     missing = update(success=False)
     assert 'No update found' in missing.stdout, missing.stdout
     shutil.copy(archive_path, downloads / archive_path.name)
@@ -189,6 +189,13 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
     current = update()
     assert 'Nothing to update' in current.stdout, current.stdout
     fake_older()
+    # A saved ZIP is not checked like a GitHub download: Enter alone cancels.
+    if os.name == 'nt':
+        asked = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(app / 'Update.ps1'), '-Offline',
+                                '-Folder', str(downloads), '-GamePath', str(game), '-NoShortcut'],
+                               env=env, cwd=root, capture_output=True, text=True, input='\n')
+        assert asked.returncode == 1 and 'Update cancelled.' in asked.stdout, asked.stdout + asked.stderr
+        assert target.read_bytes() == b'older pack build'
     updated = update()
     version = manifest['version'].split('-')[0]
     assert 'Updating from version 0.6.59 to ' + version in updated.stdout, updated.stdout
@@ -239,14 +246,14 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         published['release'] = False
         fake_older()
         none_yet = run(app / 'Update.ps1', '-ApiBase', api, '-Repository', 'test/mod', '-Folder', str(downloads),
-                       '-GamePath', str(game), '-NoShortcut')
+                       '-GamePath', str(game), '-NoShortcut', '-Yes')
         assert 'No release on GitHub yet' in none_yet.stdout and 'Upgraded from version 0.6.59' in none_yet.stdout, none_yet.stdout
     finally:
         server.shutdown()
     # GitHub unreachable: falls back to a saved ZIP.
     fake_older()
     offline = run(app / 'Update.ps1', '-ApiBase', api, '-Repository', 'test/mod', '-Folder', str(downloads),
-                  '-GamePath', str(game), '-NoShortcut')
+                  '-GamePath', str(game), '-NoShortcut', '-Yes')
     assert 'Could not reach GitHub' in offline.stdout and 'Upgraded from version 0.6.59' in offline.stdout, offline.stdout
     assert target.read_bytes() == new_pack
     # Installing while the helper runs: the installer closes it (Windows only).
@@ -270,7 +277,22 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
     assert target.read_bytes() == b'changed'
     target.write_bytes(original_pack)
     (base / 'companion.log').write_text('preserve diagnostics')
-    run(app / 'Uninstall.ps1')
+    # Uninstalling while the helper runs: it is closed first (Windows only).
+    helper = None
+    if os.name == 'nt':
+        helper = subprocess.Popen(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(app / 'Companion.ps1'), '-Console'],
+                                  env=env, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import time
+        time.sleep(4)
+        assert helper.poll() is None, 'Helper did not start'
+    try:
+        removed = run(app / 'Uninstall.ps1')
+        if helper:
+            assert 'Closing the accessibility helper.' in removed.stdout, removed.stdout
+            helper.wait(timeout=10)
+    finally:
+        if helper and helper.poll() is None:
+            helper.kill()
     assert not target.exists() and not app.exists()
     assert (game / 'data/unrelated.pack').read_bytes() == b'preserve this'
     assert (game / 'save.txt').read_text() == 'preserve save'
@@ -285,4 +307,4 @@ with tempfile.TemporaryDirectory(prefix='installer-test-', dir=root / 'local') a
         run(app / 'Uninstall.ps1')
         assert automation.read_bytes() == modified, 'Changed automation helper must be preserved'
         assert (game / 'save.txt').read_text() == 'preserve save'
-print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, one-step update from the latest GitHub release (checksum checked) or a downloaded ZIP, closing a running helper, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')
+print('PASS: shipped ZIP install, non-default path with spaces, idempotence, upgrade over an earlier install, one-step update from the latest GitHub release (checksum checked) or a downloaded ZIP, closing a running helper on install and uninstall, asking before a saved ZIP, move from the earlier names, mismatch refusal, tamper detection, uninstall and preservation')
