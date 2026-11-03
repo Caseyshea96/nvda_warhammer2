@@ -1,4 +1,4 @@
-# The companion says "The game is busy." once when the mod's heartbeat stops
+# The companion says "The game is not responding." once when the mod's heartbeat stops
 # for over 5 s while the game is in front, and "The game is responding again."
 # when it comes back. Loading screens / intro movies ('loading'), an old
 # heartbeat never seen fresh, and an unfocused game stay quiet. Runs the
@@ -54,21 +54,21 @@ try {
     Reset; Beat 'campaign'; Watch-GameStall; Age 4; Watch-GameStall
     if ($texts.Count) { throw 'A 4 s gap (camera jump) is not busy: ' + (Said) }
     Age 6; Watch-GameStall
-    if ((Said) -ne 'The game is busy.' -or $interrupts[0] -ne $false) { throw 'Busy after 5 s, queued: ' + (Said) }
+    if ((Said) -ne 'The game is not responding.' -or $interrupts[0] -ne $false) { throw 'Busy after 5 s, queued: ' + (Said) }
     Age 9; Watch-GameStall; Age 20; Watch-GameStall
     if ($texts.Count -ne 1) { throw 'Busy is said once per stall: ' + (Said) }
     Beat 'campaign'; Watch-GameStall
-    if ((Said) -ne 'The game is busy. | The game is responding again.' -or $interrupts[1] -ne $false) { throw 'Back again: ' + (Said) }
+    if ((Said) -ne 'The game is not responding. | The game is responding again.' -or $interrupts[1] -ne $false) { throw 'Back again: ' + (Said) }
     Beat 'campaign'; Watch-GameStall
     if ($texts.Count -ne 2) { throw 'Responding again is said once: ' + (Said) }
     Age 7; Watch-GameStall
-    if ($texts.Count -ne 3 -or $texts[2] -ne 'The game is busy.') { throw 'A second stall is announced again: ' + (Said) }
+    if ($texts.Count -ne 3 -or $texts[2] -ne 'The game is not responding.') { throw 'A second stall is announced again: ' + (Said) }
     'PASS: busy after 5 s once, responding again once, a new stall again'
 
     Reset; Beat 'campaign'; Watch-GameStall; $script:Focused = $false; Age 8; Watch-GameStall
     if ($texts.Count) { throw 'Game not in front: quiet' }
     $script:Focused = $true; Watch-GameStall
-    if ((Said) -ne 'The game is busy.') { throw 'Back in front during the stall: busy: ' + (Said) }
+    if ((Said) -ne 'The game is not responding.') { throw 'Back in front during the stall: busy: ' + (Said) }
 
     Reset; Beat 'loading'; Watch-GameStall; Age 60; Watch-GameStall
     if ($texts.Count) { throw 'Loading screen / intro movies: quiet: ' + (Said) }
@@ -82,6 +82,6 @@ try {
     if ($texts.Count) { throw 'A heartbeat over 10 minutes old is not announced' }
 
     Reset; Beat 'main'; Watch-GameStall; Age 6; Watch-GameStall; Beat 'loading'; Watch-GameStall
-    if ((Said) -ne 'The game is busy.') { throw 'Busy then loading: no "responding again": ' + (Said) }
+    if ((Said) -ne 'The game is not responding.') { throw 'Busy then loading: no "responding again": ' + (Said) }
     'PASS: unfocused, loading/movies, old heartbeat, over 10 minutes and busy-then-loading stay quiet'
 } finally { Remove-Item -LiteralPath $base -Recurse -Force -ErrorAction SilentlyContinue }

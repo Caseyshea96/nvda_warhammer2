@@ -1,17 +1,19 @@
-# "The game is busy." — 0.6.73 (November 3, 2026)
+# "The game is not responding." — 0.6.73 (November 3, 2026)
 
 Owner request (Nov 3, after the freeze investigation): "Yes, add it" — tell
 the player when the game stalls, instead of silence.
 
 ## What the player hears
 
-- **"The game is busy."** when the mod's heartbeat (`reader-state.tsv`,
+- **"The game is not responding."** when the mod's heartbeat (`reader-state.tsv`,
   rewritten about once a second) is more than 5 s old while the game window
   is in front. Said once per stall, queued (does not cut off speech).
 - **"The game is responding again."** when the heartbeat is fresh again.
 - Nothing when the game is not in front, while a campaign loads, during the
   intro movies, for a heartbeat this companion never saw fresh (an old
   session), or for a heartbeat over 10 minutes old.
+- Wording (owner, Nov 3: "game is not responding is more accurate"): the
+  first build said "The game is busy."; the live runs below used that text.
 - Player guide (`GRAPHICS_PREVIEW.txt`, Shift+F3 entry): wait for "The game
   is responding again." before pressing more keys.
 
@@ -44,7 +46,7 @@ the player when the game stalls, instead of silence.
 busy." 4 s into it, "The game is responding again." on resume, reader alive.
 About 2 minutes later, moving through the Game Menu, the game froze for good
 (reader silent 3+ minutes, game frames identical, Windows still "responding",
-one core busy, no GPU timeout report): the companion said "The game is busy."
+one core busy, no GPU timeout report): the companion said "The game is not responding."
 (it had also stalled briefly 4 s before: busy, back, busy). The earlier pause
 may have contributed; killed after 3 minutes (`campaign-freeze.jsonl`).
 
@@ -53,6 +55,10 @@ fine (Resume … Support, reader alive). Quit → "Quit? Press Enter again to
 confirm." → the game's own dialog ("If you quit now you will lose all unsaved
 progress") → Accept: the reader state went `loading`, then the menu said
 "Warhammer accessibility 0.6.73 ready." with no false "busy".
+
+`work/live-0.6.73-not-responding` (rebuilt with the new wording): Continue
+Campaign, F6, an 8 s pause: "The game is not responding." 4 s in, "The game
+is responding again." on resume, reader alive.
 
 No turn ended, nothing saved: save files unchanged. NVDA was not running
 (speech checked in the trace, not heard).

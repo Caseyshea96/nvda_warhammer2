@@ -74,7 +74,7 @@ an hour of back-to-back sessions).
   timeouts under constant full GPU load), not the mod: they happen with the
   campaign reader off, and with 0.6.66. The friend's PC may not have them.
 - The mod cannot stop a GPU hang. It can make one less confusing for a blind
-  player (not built): the companion could say "The game is busy." when the
+  player (not built): the companion could say "The game is not responding." when the
   heartbeat stops for a few seconds and "Ready." when it comes back.
 - Worth doing on this PC (owner): update the Intel graphics driver (Intel's
   current driver for Iris Plus is much newer than April 2021); keep the
@@ -89,7 +89,7 @@ an hour of back-to-back sessions).
 
 ## Later the same day (0.6.73)
 
-The companion now says "The game is busy." during a stall
+The companion now says "The game is not responding." during a stall
 (`docs/BUSY_NOTICE_0_6_73.md`). In `work/live-0.6.73-busy` the game froze
 for good while moving through the campaign Game Menu, about 2 minutes after
 a 9 s test pause of the process: frames identical, Windows "responding", one

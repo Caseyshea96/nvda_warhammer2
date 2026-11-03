@@ -243,7 +243,7 @@ try {
         if ($script:StallSaid -or -not $script:StallSeen -or $script:StallScreen -eq 'loading' -or $age -le 5 -or $age -gt 600) { return }
         if (-not (Test-GameFocused)) { return }
         $script:StallSaid = $true
-        Speak 'The game is busy.' -Interrupt $false
+        Speak 'The game is not responding.' -Interrupt $false
     }
     function Read-Bridge {
         if ($script:MenuKeysObj) {

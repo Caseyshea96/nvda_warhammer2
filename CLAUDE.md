@@ -28,8 +28,8 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
-- `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is
-  busy." when the heartbeat stops over 5 s with the game in front, and "The
+- `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is not
+  responding." when the heartbeat stops over 5 s with the game in front, and "The
   game is responding again."; the mod marks loading/movies/teardown
   `loading`. Installed and live-tested on this PC. `tools/live/Pause-Game.ps1`
   simulates a stall.
