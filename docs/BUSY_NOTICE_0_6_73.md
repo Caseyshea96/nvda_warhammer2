@@ -75,3 +75,11 @@ No turn ended, nothing saved: save files unchanged. NVDA was not running
 The campaign Game Menu reads each button twice ("Resume, button" then
 "Resume Game"; "Save, button" then "Save") — the label text is a separate
 item, as "Exit to Windows" was before 0.6.71.
+
+## Published
+
+Owner's go-ahead (Nov 3): release **v0.6.73**
+(https://github.com/Caseyshea96/nvda_warhammer2/releases/tag/v0.6.73, ZIP +
+`.sha256`; it also carries 0.6.71 and 0.6.72). The downloaded ZIP matches the
+local build; the installed Update shortcut script says "Version 0.6.73 is
+installed; the newest release is 0.6.73. Nothing to update."

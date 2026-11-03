@@ -31,7 +31,7 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 - `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is not
   responding." when the heartbeat stops over 5 s with the game in front, and "The
   game is responding again."; the mod marks loading/movies/teardown
-  `loading`. Installed and live-tested on this PC. `tools/live/Pause-Game.ps1`
+  `loading`. Installed, live-tested on this PC, published as release v0.6.73. `tools/live/Pause-Game.ps1`
   simulates a stall.
 
 - `docs/FREEZE_INVESTIGATION_2026-11-03.md` — the freezes / silent reader
