@@ -1033,5 +1033,30 @@ do
     assert(clicked=='tree.child0.child3.child0.child1.child0.child0.child0.child0.child69','Province row 70 is found: ' .. tostring(clicked))
     assert(contents('bridge.jsonl'):find('Far City, Province Sixty-nine.',1,true),contents('bridge.jsonl'))
 end
+-- Live Game Menu: button_windows has a child named string, not button_txt.
+-- Its label must name the button, and exiting always requires confirmation.
+do
+    for _,condition in ipairs({'normal','navigate','hidden','disabled','replaced','timeout'}) do
+        local make=start('campaign',nil,2)
+        local button=nodes['tree.child0.child0']
+        button.id='button_windows'; button.label=''; button.count=1
+        make('tree.child0.child0.child0','string',0,'Exit to Windows')
+        begin(); tick(12)
+        assert(contents('bridge.jsonl'):find('Exit to Windows, button',1,true),contents('bridge.jsonl'))
+        assert(not contents('bridge.jsonl'):find('"text":"Windows, button',1,true),'No shortened duplicate button')
+        fire('ShortcutTriggered',{string='script_F4'})
+        assert(dispatches==0 and said()=='Exit to Windows? Press Enter again to confirm.',said())
+        if condition=='navigate' then
+            fire('ShortcutTriggered',{string='script_F2'}); fire('ShortcutTriggered',{string='script_F3'})
+        elseif condition=='hidden' then button.visible=false
+        elseif condition=='disabled' then button.faults.IsInteractive='nil'
+        elseif condition=='replaced' then button.id='button_other'
+        elseif condition=='timeout' then tick(11) end
+        fire('ShortcutTriggered',{string='script_F4'})
+        if condition=='normal' then
+            assert(dispatches==1 and clicked=='tree.child0.child0','Click the button, never its text child')
+        else assert(dispatches==0,'Unsafe quit: ' .. condition) end
+    end
+end
 io=saved_io;os.date=saved_date
 print('PASS: ' .. scenarios .. ' campaign diagnostic scenarios; HUD readiness, scoped discovery, typed failures, capture protocol, replay/generation/lease guards, limits, cancellation and zero clicks')

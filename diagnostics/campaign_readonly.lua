@@ -31,7 +31,7 @@ if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player
 -- os.clock makes it unique: the companion drops speech from a retired
 -- session, and a table address alone can repeat in a later campaign load.
 local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
-local version='0.6.70'
+local version='0.6.71'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -589,7 +589,8 @@ local function page_read()
                 if entry_name=='' and not group and (state=='active' or state=='hover' or state=='selected' or state=='down') then entry_name=button_name(id,item.ids); derived=entry_name~='' end
                 -- A button's own label element ("Recruit" inside Recruit) is not a second item.
                 local owner=item.owner
-                if owner and not group and parent~='button_focus' and (id=='button_txt' or id=='dy_txt') then
+                if owner and not group and parent~='button_focus' and (id=='button_txt' or id=='dy_txt'
+                    or (id=='string' and parent=='button_windows')) then
                     if name~='' and owner.derived then owner.name=name; owner.derived=false end
                     entry_name=''
                 end
@@ -776,7 +777,7 @@ local function publish_reader_state(force)
     f:write(line); f:close(); state_line=line
 end
 local function needs_confirmation(id)
-    return id=='button_end_turn' or id=='button_raise' or id:match('quit')~=nil or id:match('exit')~=nil or id:match('load')~=nil
+    return id=='button_end_turn' or id=='button_raise' or id=='button_windows' or id:match('quit')~=nil or id:match('exit')~=nil or id:match('load')~=nil
         or id:match('abandon')~=nil or id:match('disband')~=nil or id:match('raze')~=nil
         or id:match('demolish')~=nil or id:match('dismantle')~=nil or id:match('recruit')~=nil
 end
