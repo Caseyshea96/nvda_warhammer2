@@ -69,6 +69,7 @@ tools/live/Stop-Session.ps1 -Evidence work/live-<ver>-<topic>   # ALWAYS, also a
 After camera or selection changes (campaign load, a list-row click, an army entering a settlement) either the game stops responding, or it keeps running while the mod's timers stop. 0.6.66 does it too.
 - Detect with `Check-Reader.ps1`: `READER=silent` (heartbeat over 3 s old). A still screenshot proves nothing.
 - `RESPONDING=False` for over 2 minutes, or silent for over a minute: copy the logs into the evidence folder, `Stop-Session`, relaunch. Do not retry the same step blindly. Before blaming your change, compare once with the previous build (install its ZIP without `-Upgrade`).
+- Likely cause on this PC: Intel iGPU driver timeouts (`docs/FREEZE_INVESTIGATION_2026-11-03.md`). Run `tools/live/Monitor-Game.ps1 -GamePid <pid> -Out <evidence>/monitor.csv` hidden during a run, and after a freeze look for a new `WATCHDOG-<date>-<time>.dmp` in Windows Error Reporting events (LiveKernelEvent 141).
 - During a stall the companion keeps its keys for 15 s (they wait in keys.tsv); after that it releases them and keys go to the game.
 
 ## 6. Document and ship

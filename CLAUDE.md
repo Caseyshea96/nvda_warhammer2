@@ -28,6 +28,11 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
+- `docs/FREEZE_INVESTIGATION_2026-11-03.md` — the freezes / silent reader
+  line up with Intel graphics-driver timeouts on this laptop (also with the
+  campaign reader off); not reproduced Nov 3. Graphics lowered further
+  (owner OK). `tools/live/Monitor-Game.ps1` logs GPU/CPU/heartbeat per second.
+
 - `docs/LOADING_DISMISS_0_6_72.md` — loading is announced before campaign
   transitions; Ctrl+Backspace dismisses scoped campaign notifications.
   Installed 0.6.72; live NVDA loading/map speech and unavailable dismissal
