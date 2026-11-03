@@ -363,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.71-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.72-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -1196,6 +1196,13 @@ local function send_click(node, name)
     log('activation.dispatch', name)
     if log_failed then error('Diagnostic log unavailable before dispatch') end
     activation_outcome = 'input-sent'
+    -- Timers can stop as soon as the native click enters the loading screen.
+    -- Write speech first so the companion can announce it independently.
+    if name == 'Start Campaign' then
+        speak('Loading campaign. Please wait. An intro movie may play; press Escape to skip it.')
+    elseif name == 'Continue Campaign' or name == 'Load' then
+        speak('Loading campaign. Please wait.')
+    end
     node:SimulateLClick()
     log('activation.returned', true)
 end
@@ -1363,7 +1370,7 @@ local function activate_player_target(item)
     end
     if log_failed then invalidate(); speak('Accessibility log unavailable. Restart the game.'); return end
     send_click(node, name)
-    speak(radio and (name .. ' selected.') or (name .. ' activated.'))
+    if name ~= 'Continue Campaign' then speak(radio and (name .. ' selected.') or (name .. ' activated.')) end
 end
 local function activate_control()
     if screen_kind == 'graphics_advanced' or screen_kind == 'graphics_advanced_overlay' then cancel(); speak('Not supported yet.'); return end
@@ -2188,7 +2195,7 @@ local function lord_view_activate(item)
     elseif kind=='load_button' then
         local button=d.load and d.load.button_confirm_load
         if not button or button.state=='inactive' then cancel(); speak('Load is unavailable. Choose a save first.'); return end
-        if lord_click(d,button.path,button.ids,button.id,'Load') then speak('Loading the save. This takes a minute.') end
+        lord_click(d,button.path,button.ids,button.id,'Load')
     elseif kind=='incompatible' then cancel(); speak('Not supported yet.')
     elseif kind=='combo' then
         local dd=d and d.dropdowns and d.dropdowns[item.field]
@@ -2266,7 +2273,6 @@ local function lord_activate()
     if log_failed then invalidate(); speak('Accessibility log unavailable. Restart the game.'); return end
     if starting then
         send_click(node,'Start Campaign')
-        speak('Starting the campaign. An intro movie plays first; press Escape to skip it.')
         return
     end
     if prelude then
@@ -2472,7 +2478,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.71-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.72-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2668,7 +2674,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.71 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end

@@ -1277,7 +1277,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.71 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1382,8 +1382,10 @@ status=auto_request('activate'); assert(status[7]=='input-sent' and #dispatches=
 start(nil,lord_live,false)
 assert(browse_to('Start Campaign, button'))
 key('script_F4'); assert(spoken()=='Start the campaign as Tyrion, High Elves, Eataine? Press Enter again to start.',spoken()); no_dispatch('Start Campaign asks even with single press')
+click_hook=function() assert(spoken():find('Loading campaign. Please wait.',1,true)==1,'Announce loading before native click can block timers') end
 key('script_F4'); assert(#dispatches==1 and dispatches[1]=='tree.child2.child1.child0','Second press starts the campaign')
-assert(spoken()=='Starting the campaign. An intro movie plays first; press Escape to skip it.',spoken())
+click_hook=nil
+assert(spoken()=='Loading campaign. Please wait. An intro movie may play; press Escape to skip it.',spoken())
 assert(contents('native-ui-graphics-preview.log'):find('activation.dispatch\tstring\tStart Campaign',1,true))
 -- 0.6.62: Select Lord on another PC (no exact counts). Only a visible or
 -- unreadable extra root layer blocks; the chosen element is re-checked.
@@ -1546,7 +1548,8 @@ key('script_F4'); assert(#dispatches==0 and says('Continue Campaign is unavailab
 start(nil,other_pc)
 nodes[continue_campaign].data.CurrentState='active'; nodes[continue_campaign .. '.child0'].data.CurrentState='active'
 key('script_F2'); key('script_F2'); assert(says('Continue Campaign, button, 2 of 22'),last())
-key('script_F4'); assert(#dispatches==1 and dispatches[1]==continue_campaign and says('Continue Campaign activated.'),last())
+click_hook=function() assert(says('Loading campaign. Please wait.'),'Continue announces before click') end
+key('script_F4'); assert(#dispatches==1 and dispatches[1]==continue_campaign and says('Loading campaign. Please wait.'),last()); click_hook=nil
 start(nil,other_pc)
 for n=1,3 do key('script_F2') end; assert(says('Load Campaign'),last())
 key('script_F4'); assert(#dispatches==0 and says('Load Campaign is unavailable.'),last())
@@ -1734,7 +1737,8 @@ click_hook=function()
 end
 key('script_F4'); assert(#dispatches==1 and dispatches[1]==save_row,'Enter selects the save'); click_hook=nil
 ticks_until(5); assert(spoken()=='Eataine_Auto-save, Normal, turn 1, 10/29/2026 5:07:07 PM selected. Load, button, 2 of 4',spoken())
-key('script_F4'); assert(#dispatches==2 and dispatches[2]==load_button and spoken()=='Loading the save. This takes a minute.',spoken())
+click_hook=function() assert(spoken()=='Loading campaign. Please wait.','Load announces before click') end
+key('script_F4'); assert(#dispatches==2 and dispatches[2]==load_button and spoken()=='Loading campaign. Please wait.',spoken()); click_hook=nil
 -- A Load button replaced between the read and the press is not clicked.
 local ready_to_load=load_copy(function(c)
     c[save_row].CurrentState='selected'; c[save_row].GetTooltipText=''

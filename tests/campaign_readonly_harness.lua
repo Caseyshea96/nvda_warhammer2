@@ -1058,5 +1058,41 @@ do
         else assert(dispatches==0,'Unsafe quit: ' .. condition) end
     end
 end
+-- Ctrl+Backspace dismisses only known notification controls, one per press.
+do
+    for _,condition in ipairs({'advice','skip','none','disabled','hidden','replaced','stale','overlay','repeat','notice','changednotice'}) do
+        local make=start('campaign',nil,1)
+        nodes.tree.count=5
+        local panel=make('tree.child4',condition=='skip' and 'notification_frame' or 'advice_interface',1,'')
+        local button=make('tree.child4.child0',condition=='skip' and 'button_skip' or 'button_close',0,'')
+        if condition=='notice' or condition=='changednotice' then
+            panel.id='event_dialog'; panel.count=2; button.id='button_accept'
+            make('tree.child4.child1','dy_title',0,'How They Play')
+        end
+        if condition=='none' then panel.id='game_menu' end
+        begin(); tick(12)
+        local function send(action,stale)
+            local state=contents('reader-state.tsv')
+            local session,gen=state:match('^WH2READER1\t([^\t]+)\t([^\t]+)')
+            local previous=files[prefix .. 'keys.tsv'] or ''
+            local seq=tonumber(previous:match('\n(%d+)\t[^\n]+\n$')) or 0
+            files[prefix .. 'keys.tsv']='WH2KEYS1\tdismiss-test\t' .. session .. '\t' .. (stale and '0' or gen) .. '\n' .. (seq+1) .. '\t' .. action .. '\n'
+            tick(1)
+        end
+        send('noop') -- establish owner, no backlog
+        if condition=='disabled' then button.faults.IsInteractive='nil'
+        elseif condition=='hidden' then button.visible=false
+        elseif condition=='replaced' then button.id='button_exit'
+        elseif condition=='changednotice' then nodes['tree.child4.child1'].label='Start battle?'
+        elseif condition=='overlay' then
+            nodes.tree.count=6; make('tree.child5','game_menu',0,'Game Menu')
+        end
+        send('dismiss',condition=='stale')
+        if condition=='advice' or condition=='skip' or condition=='repeat' or condition=='notice' then
+            assert(dispatches==1 and clicked=='tree.child4.child0',condition .. ': ' .. tostring(said()))
+            if condition=='repeat' then send('dismiss'); assert(dispatches==1,'Cannot click again before re-reading') end
+        else assert(dispatches==0,'Unsafe dismissal: ' .. condition) end
+    end
+end
 io=saved_io;os.date=saved_date
 print('PASS: ' .. scenarios .. ' campaign diagnostic scenarios; HUD readiness, scoped discovery, typed failures, capture protocol, replay/generation/lease guards, limits, cancellation and zero clicks')

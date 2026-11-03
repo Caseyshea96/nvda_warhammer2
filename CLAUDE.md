@@ -28,6 +28,12 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
+- `docs/LOADING_DISMISS_0_6_72.md` — loading is announced before campaign
+  transitions; Ctrl+Backspace dismisses scoped campaign notifications.
+  Installed 0.6.72; live NVDA loading/map speech and unavailable dismissal
+  verified. Actual live popup dismissal still needs verification. Rollback: preinstall 0.6.72
+  backup contains 0.6.71.
+
 - `docs/QUIT_WINDOWS_0_6_71.md` — campaign Game Menu's Exit to Windows label
   is folded into its button; exiting always asks for confirmation. Offline
   checks and pack build passed; live exit remains unverified.

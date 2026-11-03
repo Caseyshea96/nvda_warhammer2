@@ -31,7 +31,7 @@ if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player
 -- os.clock makes it unique: the companion drops speech from a retired
 -- session, and a table address alone can repeat in a later campaign load.
 local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
-local version='0.6.71'
+local version='0.6.72'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -1414,7 +1414,46 @@ local function speak_current()
     end
     browse(index==0 and 1 or 0,false)
 end
+-- Only known notification controls: never a generic Close in another panel.
+local function dismiss_notification()
+    pending_confirm=nil
+    if not finished or limited then speak('Notifications are still being read. Try again.'); return end
+    local target,priority,layer,top_layer=nil,0,-1,-1
+    local notices={}
+    for _,item in ipairs(entries) do
+        if entry_role(item)=='heading' and (item.name=='How They Play' or item.name=='Mission Issued!') then
+            notices[item.path[1]]=item
+        end
+    end
+    for _,item in ipairs(entries) do
+        local advice,notification=false,false
+        for _,id in ipairs(item.ids or {}) do
+            if id=='advice_interface' then advice=true end
+            if id=='notification_frame' then notification=true end
+        end
+        local rank=(notices[item.path[1]] and item.id=='button_accept') and 3
+            or (advice and item.id=='button_close') and 2
+            or (notification and item.id=='button_skip') and 1 or 0
+        local level=item.path and item.path[1] or -1
+        if level>top_layer then top_layer=level end
+        if rank>priority or (rank>0 and rank==priority and level>layer) then target,priority,layer=item,rank,level end
+    end
+    if not target or layer<top_layer then speak('No dismissible notification.'); return end
+    local node=fresh_node(target); if not node then return end
+    if priority==3 then
+        -- Accept is safe only while the same informational notice is present.
+        local title=notices[layer]
+        local context=hud_context()
+        local heading=context and resolve(context.root,title.path,title.ids)
+        local ok,text=read(function() return heading:GetStateText() end)
+        if not ok or clean(text)~=title.name then speak('The screen changed. Press again.'); return end
+    end
+    local clicked=native_click(node)
+    speak(clicked and 'Notification dismissed.' or 'Could not dismiss the notification.')
+    if clicked then finished=false; post_click=ticks+2 end -- no repeat click on a stale capture
+end
 local function key_action(action)
+    if action=='dismiss' then dismiss_notification(); return end
     if action=='lords' or action=='nextlord' then guarded(action,model_call,function() switch_selection(action=='nextlord') end); return end
     if action=='moves' then guarded(action,model_call,open_moves); return end
     if menu then
@@ -1465,7 +1504,12 @@ local function poll_keys()
     table.sort(events,function(a,b) return a.seq<b.seq end)
     local handled=0
     for _,event in ipairs(events) do
-        if event.seq>keys_seq and handled<8 then keys_seq=event.seq; handled=handled+1; key_action(event.action) end
+        if event.seq>keys_seq and handled<8 then
+            keys_seq=event.seq; handled=handled+1
+            if event.action=='dismiss' and (lines[1] or ''):match('\t([^\t]+)$')~=tostring(generation) then
+                speak('The screen changed. Press again.')
+            else key_action(event.action) end
+        end
     end
     if newest>keys_seq then keys_seq=newest end
 end

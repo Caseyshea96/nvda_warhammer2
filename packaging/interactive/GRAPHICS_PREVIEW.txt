@@ -44,7 +44,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.71 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -128,6 +128,16 @@ Recruit and Build ("...? Press Enter again to confirm."). Moving away
 cancels.
 The campaign Game Menu's Exit to Windows is one button: press Enter, then
 Enter again to confirm. Moving to another item cancels confirmation.
+
+Loading: Start Campaign, Continue Campaign and Load announce "Loading
+campaign. Please wait." before loading begins. The map reader announces
+"Campaign map" when it is ready. A new campaign may play an intro movie.
+Ctrl+Backspace: dismiss How They Play, Mission Issued!, the current advisor
+panel, or skip the current end-turn
+notification. Press once per notification. This does not end the turn or close
+the game. Plain Escape still belongs to the game. If another dialog blocks
+the notification, close that dialog first. Other event dialogs still use
+their Accept button (A to find it, Enter to activate).
 
 THINGS TO TRY (in a new campaign)
 1. Opening panels: "How They Play" and "Mission Issued!" appear first. Press

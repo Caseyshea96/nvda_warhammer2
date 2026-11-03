@@ -225,7 +225,7 @@ try {
     function Read-Bridge {
         if ($script:MenuKeysObj) {
             $script:Reader = Read-ReaderState
-            $failures = $script:MenuKeysObj.SetActive($null -ne $script:Reader)
+            $failures = $script:MenuKeysObj.SetActive($null -ne $script:Reader, ($null -ne $script:Reader -and $script:Reader.screen -eq 'campaign'))
             if ($failures -and $failures -ne $script:LastMenuKeyFailures) {
                 Log-Error ('Menu keys: ' + $failures + ' could not be registered or released (another program may own them).')
             }

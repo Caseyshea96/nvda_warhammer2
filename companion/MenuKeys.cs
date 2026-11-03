@@ -14,7 +14,7 @@ namespace WarhammerAccessibility {
     // Tab move, Home/End jump, Enter/Space activate, letters jump to items.
     // Registered only while the game window is focused and the mod reports a
     // menu screen; released otherwise so the game and other programs keep them.
-    // Escape is never taken: it stays the game's own Back key.
+    // Plain Escape stays the game's own Back key.
     public sealed class MenuKeys : NativeWindow, IDisposable {
         [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr h, int id, uint mods, uint key);
         [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr h, int id);
@@ -38,6 +38,7 @@ namespace WarhammerAccessibility {
             Bind(0x0D, NoRepeat, "activate"); Bind(0x20, NoRepeat, "activate");
             // Backspace: back one step in a sequence of choices (Select Lord).
             Bind(0x08, NoRepeat, "back");
+            Bind(0x08, NoRepeat | 0x0002, "dismiss"); // Ctrl+Backspace, campaign only
             // Campaign map: F6 switches between a lord and his settlement,
             // Shift+F6 goes to the next lord, F7 lists places to move to.
             Bind(0x75, NoRepeat, "lords"); Bind(0x75, NoRepeat | 0x0004, "nextlord");
@@ -56,11 +57,15 @@ namespace WarhammerAccessibility {
         }
 
         // Returns how many keys failed to register or release (0 when all went well).
-        public int SetActive(bool active) {
+        public int SetActive(bool active, bool campaign = false) {
             if (disposed) return 0;
             int failures = 0;
             if (active && GameFocused()) {
                 foreach (var pair in bindings) {
+                    if (pair.Value.Action == "dismiss" && !campaign) {
+                        if (owned.Contains(pair.Key) && UnregisterHotKey(Handle, pair.Key)) owned.Remove(pair.Key);
+                        continue;
+                    }
                     if (owned.Contains(pair.Key)) continue;
                     if (RegisterHotKey(Handle, pair.Key, pair.Value.Mods, pair.Value.Key)) owned.Add(pair.Key); else failures++;
                 }
