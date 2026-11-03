@@ -28,6 +28,12 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
+- `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is
+  busy." when the heartbeat stops over 5 s with the game in front, and "The
+  game is responding again."; the mod marks loading/movies/teardown
+  `loading`. Installed and live-tested on this PC. `tools/live/Pause-Game.ps1`
+  simulates a stall.
+
 - `docs/FREEZE_INVESTIGATION_2026-11-03.md` — the freezes / silent reader
   line up with Intel graphics-driver timeouts on this laptop (also with the
   campaign reader off); not reproduced Nov 3. Graphics lowered further
@@ -212,7 +218,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.70; before it 0.6.69) as the rollback.
+- Preserve the last known working build (0.6.73; before it 0.6.70, backup `work/preinstall-0.6.73-b431ed22`) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.

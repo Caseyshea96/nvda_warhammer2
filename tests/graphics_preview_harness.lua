@@ -1277,7 +1277,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.73 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1548,8 +1548,9 @@ key('script_F4'); assert(#dispatches==0 and says('Continue Campaign is unavailab
 start(nil,other_pc)
 nodes[continue_campaign].data.CurrentState='active'; nodes[continue_campaign .. '.child0'].data.CurrentState='active'
 key('script_F2'); key('script_F2'); assert(says('Continue Campaign, button, 2 of 22'),last())
-click_hook=function() assert(says('Loading campaign. Please wait.'),'Continue announces before click') end
+click_hook=function() assert(says('Loading campaign. Please wait.'),'Continue announces before click'); assert(reader_state()[5]=='loading','Loading state written before the click: ' .. tostring(reader_state()[5])) end
 key('script_F4'); assert(#dispatches==1 and dispatches[1]==continue_campaign and says('Loading campaign. Please wait.'),last()); click_hook=nil
+ticks(12); assert(reader_state()[5]=='loading','Loading stays while the campaign loads')
 start(nil,other_pc)
 for n=1,3 do key('script_F2') end; assert(says('Load Campaign'),last())
 key('script_F4'); assert(#dispatches==0 and says('Load Campaign is unavailable.'),last())
@@ -1689,6 +1690,11 @@ flat_lords=true; steps_start(); key('script_F2'); assert(spoken()=='Select Lord.
 local real_clock=os.clock
 os.clock=function() return 25 end; start(); os.clock=real_clock
 assert(contents('bridge.jsonl'):find('Intro movies playing. Press Escape to skip them.',1,true),'Movies announced at start')
+assert(reader_state()[5]=='loading','No busy notice during the movies: ' .. tostring(reader_state()[5]))
+ticks_until(10); assert(reader_state()[5]~='loading','The first key tick (movies over) clears it')
+-- Leaving the frontend (UI torn down) says loading; a rebuilt menu clears it.
+start(); ready=false; destroyed(); assert(reader_state()[5]=='loading','Teardown marks loading')
+ready=true; created(); ticks_until(10); assert(reader_state()[5]~='loading','A rebuilt menu clears loading')
 os.clock=function() return 600 end; start(); os.clock=real_clock
 assert(not contents('bridge.jsonl'):find('Intro movies playing',1,true),'No movie notice after a campaign')
 -- 0.6.66: Load Game (live capture) as two steps: campaign, then save and Load.

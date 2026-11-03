@@ -86,3 +86,13 @@ an hour of back-to-back sessions).
   had no freezes on either setting.
 - Whether the four problem runs without a dump were GPU timeouts.
 - The friend's PC (graphics hardware unknown).
+
+## Later the same day (0.6.73)
+
+The companion now says "The game is busy." during a stall
+(`docs/BUSY_NOTICE_0_6_73.md`). In `work/live-0.6.73-busy` the game froze
+for good while moving through the campaign Game Menu, about 2 minutes after
+a 9 s test pause of the process: frames identical, Windows "responding", one
+core busy, reader silent 3+ minutes, **no GPU timeout report** this time. The
+same steps in a fresh session (`work/live-0.6.73-busy-2`) worked. So not
+every freeze leaves a driver report; the pause may have contributed.

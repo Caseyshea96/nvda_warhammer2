@@ -70,6 +70,7 @@ After camera or selection changes (campaign load, a list-row click, an army ente
 - Detect with `Check-Reader.ps1`: `READER=silent` (heartbeat over 3 s old). A still screenshot proves nothing.
 - `RESPONDING=False` for over 2 minutes, or silent for over a minute: copy the logs into the evidence folder, `Stop-Session`, relaunch. Do not retry the same step blindly. Before blaming your change, compare once with the previous build (install its ZIP without `-Upgrade`).
 - Likely cause on this PC: Intel iGPU driver timeouts (`docs/FREEZE_INVESTIGATION_2026-11-03.md`). Run `tools/live/Monitor-Game.ps1 -GamePid <pid> -Out <evidence>/monitor.csv` hidden during a run, and after a freeze look for a new `WATCHDOG-<date>-<time>.dmp` in Windows Error Reporting events (LiveKernelEvent 141).
+- Since 0.6.73 the companion says "The game is busy." after 5 s of stall (game in front) and "The game is responding again."; transitions must write the screen `loading` to reader-state (else a false "busy"). Test with `tools/live/Pause-Game.ps1 -GamePid <pid> -Seconds 8`.
 - During a stall the companion keeps its keys for 15 s (they wait in keys.tsv); after that it releases them and keys go to the game.
 
 ## 6. Document and ship

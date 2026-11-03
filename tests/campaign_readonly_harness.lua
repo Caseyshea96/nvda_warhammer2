@@ -144,6 +144,13 @@ assert(not contents('native-ui-campaign-discovery.jsonl'):find('Item 1',1,true))
 start('campaign',valid,257);begin();finish();assert(status():find('"phase":"limited"',1,true))
 start('campaign',valid,80);begin();tick(3);destroyed();tick(1)
 assert(status():find('"phase":"cancelled"',1,true));assert(status():find('"count":0',1,true))
+-- 0.6.73: a torn-down campaign UI (quit, load, exit) says 'loading', also on
+-- later ticks, so the companion does not call the stopped heartbeat busy.
+assert(contents('reader-state.tsv'):find('\tloading\n',1,true),'UI teardown marks loading: ' .. contents('reader-state.tsv'))
+start('campaign',valid);begin();tick(12)
+assert(contents('reader-state.tsv'):find('\tcampaign\n',1,true),'The map says campaign: ' .. contents('reader-state.tsv'))
+destroyed();tick(12)
+assert(contents('reader-state.tsv'):find('\tloading\n',1,true),'Loading stays after teardown: ' .. contents('reader-state.tsv'))
 start('campaign',valid);ui_ready=false;begin();tick(4);assert(contents('bridge.jsonl')=='')
 -- Fresh explicit capture sees changed fields; repeated tokens cannot reread.
 start('campaign',valid);begin();finish();nodes['tree.child0.child0'].label='Updated HUD value'

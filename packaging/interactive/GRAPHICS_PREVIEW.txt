@@ -44,7 +44,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.73 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -103,6 +103,9 @@ screen order: a panel's title, its text, then its buttons.
   Shift+F3            read the screen again. If the reader ever goes
                       silent (keys do nothing), press Shift+F3; please
                       tell us when that happens and what you had just done.
+                      When the game itself stops for more than 5 seconds
+                      you hear "The game is busy."; wait for "The game is
+                      responding again." before pressing more keys.
   F2 / F3 / F4        next / previous / activate, even with HUD reading off
   F6                  switch between your lord and his settlement: from a
                       settlement (or nothing) to the nearest lord, from a

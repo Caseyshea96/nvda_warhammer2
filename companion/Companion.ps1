@@ -222,8 +222,32 @@ try {
         while ($script:KeyRing.Count -gt 16) { $script:KeyRing.RemoveAt(0) }
         Write-MenuKeys
     }
+    # A stalled game leaves a blind player in silence (live, Nov 1: graphics
+    # driver timeouts stopped the game's main loop and with it the mod). When
+    # the mod's heartbeat stops for over 5 s while the game is in front, say so
+    # once, and say when it is back. The mod marks loading screens and the
+    # intro movies 'loading'; those never count.
+    $script:StallSeen = $false; $script:StallScreen = $null; $script:StallSaid = $false
+    function Test-GameFocused { return [WarhammerAccessibility.MenuKeys]::GameFocused() }
+    function Watch-GameStall {
+        $info = New-Object IO.FileInfo (Join-Path $base 'reader-state.tsv')
+        if (-not $info.Exists) { return }
+        $age = ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds
+        if ($age -le 3) {
+            $fields = ([IO.File]::ReadAllText($info.FullName)).TrimEnd("`r", "`n").Split("`t")
+            if ($fields.Count -ne 5 -or $fields[0] -ne 'WH2READER1') { return }
+            if ($script:StallSaid -and $fields[4] -ne 'loading') { Speak 'The game is responding again.' -Interrupt $false }
+            $script:StallSaid = $false; $script:StallSeen = $true; $script:StallScreen = $fields[4]
+            return
+        }
+        if ($script:StallSaid -or -not $script:StallSeen -or $script:StallScreen -eq 'loading' -or $age -le 5 -or $age -gt 600) { return }
+        if (-not (Test-GameFocused)) { return }
+        $script:StallSaid = $true
+        Speak 'The game is busy.' -Interrupt $false
+    }
     function Read-Bridge {
         if ($script:MenuKeysObj) {
+            try { Watch-GameStall } catch { Log-Error ('Stall watch: ' + $_.Exception.Message) }
             $script:Reader = Read-ReaderState
             $failures = $script:MenuKeysObj.SetActive($null -ne $script:Reader, ($null -ne $script:Reader -and $script:Reader.screen -eq 'campaign'))
             if ($failures -and $failures -ne $script:LastMenuKeyFailures) {

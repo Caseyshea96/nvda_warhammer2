@@ -363,7 +363,7 @@ for _, base in ipairs(bases) do
     local path = base .. 'native-ui-graphics-preview.log'
     local f = io.open(path, 'w')
     if f then
-        local header = 'WH2 native UI diagnostic 0.6.72-nvda-automation-preview\n'
+        local header = 'WH2 native UI diagnostic 0.6.73-nvda-automation-preview\n'
         f:write(header); f:close(); log_bytes = #header + 1
         log_path = path; bridge_path = base .. (base == '' and 'warhammer_access.jsonl' or 'bridge.jsonl')
         local bridge = io.open(bridge_path, 'w'); if bridge then bridge:close() end
@@ -1188,6 +1188,15 @@ local function resolve_target(snapshot, target)
     if generation ~= snapshot.generation then error('UI recreated during validation') end
     return node
 end
+-- 0.6.73: the reader state says 'loading' while a campaign loads or the intro
+-- movies play (the heartbeat stops then), so the companion does not say "The
+-- game is busy." 'movies' clears at the first key tick; 'loading' stays.
+local quiet_state
+local publish_reader_state -- defined with the key channel below
+local function publish_quiet(kind)
+    quiet_state = kind
+    if publish_reader_state then pcall(publish_reader_state, true) end
+end
 -- The only native click in the mod. Drops every selection and confirmation
 -- before sending the single documented input.
 local function send_click(node, name)
@@ -1196,6 +1205,7 @@ local function send_click(node, name)
     log('activation.dispatch', name)
     if log_failed then error('Diagnostic log unavailable before dispatch') end
     activation_outcome = 'input-sent'
+    if name == 'Start Campaign' or name == 'Continue Campaign' or name == 'Load' then publish_quiet('loading') end
     -- Timers can stop as soon as the native click enters the loading screen.
     -- Write speech first so the companion can announce it independently.
     if name == 'Start Campaign' then
@@ -2297,8 +2307,8 @@ local function lifecycle(name)
     invalidate(); last_screen = nil
     log(name, generation)
 end
-core:add_ui_created_callback(function() lifecycle('lifecycle.created'); if start_automation then start_automation() end end)
-core:add_ui_destroyed_callback(function() lifecycle('lifecycle.destroyed') end)
+core:add_ui_created_callback(function() quiet_state = nil; lifecycle('lifecycle.created'); if start_automation then start_automation() end end)
+core:add_ui_destroyed_callback(function() lifecycle('lifecycle.destroyed'); publish_quiet('loading') end)
 -- These observed campaign-named notifications are supplementary cancellation
 -- hooks; the captured frontend layout check is required independently of them.
 for _, event in ipairs({'PanelOpenedCampaign', 'PanelClosedCampaign'}) do
@@ -2478,7 +2488,7 @@ local function publish_status()
     if #label > 800 then label = label:sub(1,800):gsub('[\192-\255][\128-\191]*$','') end
     local deadline='0'
     if pending then deadline=decimal_add(unix_value(),math.max(0,pending.deadline-clock_value())) end
-    local values = {'WH2STATUS1','0.6.72-nvda-automation-preview',session,tostring(generation),
+    local values = {'WH2STATUS1','0.6.73-nvda-automation-preview',session,tostring(generation),
         tostring(interaction_revision),tostring(auto_seq),auto_result,screen_kind,
         item and item.key or '-',label,tostring(#controls),pending and pending.target or '-',
         deadline,core:is_ui_created() and '1' or '0',
@@ -2634,9 +2644,10 @@ end
 -- sends keys while reader-state.tsv (rewritten here every second) is fresh.
 local keys_name = 'warhammer_accessibility_keys'
 local keys_base, keys_owner, keys_seq, keys_running, keys_ticks, keys_errors, keys_state = nil, nil, 0, false, 0, 0, nil
-local function publish_reader_state(force)
+publish_reader_state = function(force)
     if not keys_base then return end
-    local line = 'WH2READER1\t' .. session .. '\t' .. generation .. '\t' .. (core:is_frontend() and '1' or '0') .. '\t' .. screen_kind .. '\n'
+    local screen = quiet_state and 'loading' or screen_kind
+    local line = 'WH2READER1\t' .. session .. '\t' .. generation .. '\t' .. (core:is_frontend() and '1' or '0') .. '\t' .. screen .. '\n'
     if not force and line == keys_state and keys_ticks % 10 ~= 0 then return end
     local f = io.open(keys_base .. 'reader-state.tsv', 'w')
     if not f then return end
@@ -2674,7 +2685,7 @@ local function announce_ready()
     if ready_spoken then return end
     ready_spoken = true
     plain_log('startup.ready', 'ticks=' .. ready_ticks)
-    speak('Warhammer accessibility 0.6.72 ready. Arrow keys move, Enter activates.')
+    speak('Warhammer accessibility 0.6.73 ready. Arrow keys move, Enter activates.')
 end
 local function ready_tick()
     if ready_spoken then return end
@@ -2764,6 +2775,7 @@ local function start_keys()
         function(context) return context.string == keys_name end,
         function()
             if not keys_running then return end
+            if quiet_state == 'movies' then quiet_state = nil end
             local ok, err = pcall(poll_keys)
             if ok then keys_errors = 0 else
                 keys_errors = keys_errors + 1
@@ -2798,6 +2810,7 @@ else
     if ok and type(seconds) == 'number' and seconds == seconds and seconds >= 0 and seconds < 90 then
         plain_log('startup.movies', tostring(seconds))
         speak('Intro movies playing. Press Escape to skip them.')
+        publish_quiet('movies')
     end
 end
 

@@ -17,6 +17,8 @@ try {
     if ($LASTEXITCODE) { throw 'Speech trace tests failed' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/companion_interrupt_tests.ps1
     if ($LASTEXITCODE) { throw 'Companion interrupt tests failed' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/companion_stall_tests.ps1
+    if ($LASTEXITCODE) { throw 'Companion stall tests failed' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automation_atomic_tests.ps1
     if ($LASTEXITCODE) { throw 'Windows PowerShell atomic request tests failed' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automation_atomic_tests.ps1 -ClientPath tools/live/Campaign-ReadOnly.ps1

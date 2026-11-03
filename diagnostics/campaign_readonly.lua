@@ -31,7 +31,7 @@ if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player
 -- os.clock makes it unique: the companion drops speech from a retired
 -- session, and a table address alone can repeat in a later campaign load.
 local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
-local version='0.6.72'
+local version='0.6.73'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -767,8 +767,11 @@ local reader_mode=false
 -- player has no use for camera arrows first); Shift+F2 still switches.
 local mode_chosen=false
 local keys_owner,keys_seq,state_line,state_ticks,fast_ticks=nil,0,nil,0,0
+-- 0.6.73: 'loading' once the campaign UI is torn down (quit, load, exit), so
+-- the companion does not take the stopped heartbeat for a busy game.
+local leaving=false
 local function publish_reader_state(force)
-    local line='WH2READER1\t' .. session .. '\t' .. generation .. '\t' .. (reader_mode and '1' or '0') .. '\tcampaign\n'
+    local line='WH2READER1\t' .. session .. '\t' .. generation .. '\t' .. (reader_mode and '1' or '0') .. '\t' .. (leaving and 'loading' or 'campaign') .. '\n'
     state_ticks=state_ticks+1
     -- The companion needs a heartbeat under 15 s old (written about every second).
     if not force and line==state_line and state_ticks<((reader_mode and auto_reader) and 1 or 10) then return end
@@ -1669,7 +1672,10 @@ core:add_listener('warhammer_campaign_discovery_first_tick','FirstTickAfterWorld
     end)
     if not ok then stop('scheduler-error');phase='error';pcall(function() emit('{"kind":"error","detail":' .. quoted(type(err)=='string' and err or type(err)) .. '}');publish_status() end) end
 end,false)
-core:add_ui_destroyed_callback(function() if polling then cancel('ui-destroyed');publish_status() end end)
+core:add_ui_destroyed_callback(function()
+    leaving=true; pcall(publish_reader_state,true)
+    if polling then cancel('ui-destroyed');publish_status() end
+end)
 core:add_listener('warhammer_campaign_readonly_keys','ShortcutTriggered',function(c)
     return c.string=='script_F2' or c.string=='script_F3' or c.string=='script_F4'
         or c.string=='script_shift_F2' or c.string=='script_shift_F3'
