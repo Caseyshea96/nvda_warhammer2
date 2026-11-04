@@ -106,6 +106,18 @@ local function load(list)
 end
 load(records)
 assert(nodes.tree,'run has no root')
+-- A hidden HUD (battle panels hide it) is logged as a skip without its ID;
+-- the reader needs a root child named layout, so the first unnamed hidden one is it.
+do
+    local named=false
+    for i=0,(nodes.tree.count or 0)-1 do local c=nodes['tree.child' .. i]; if c and c.id=='layout' then named=true end end
+    if not named then
+        for i=0,(nodes.tree.count or 0)-1 do
+            local c=nodes['tree.child' .. i]
+            if c and not c.visible and (c.id=='hidden' or c.id=='') then c.id='layout'; break end
+        end
+    end
+end
 local timer='warhammer_campaign_readonly_tick'
 core={is_campaign=function() return true end,is_battle=function() return false end,
     is_ui_created=function() return true end,get_ui_root=function() return nodes.tree end,

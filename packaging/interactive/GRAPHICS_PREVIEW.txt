@@ -44,7 +44,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.73 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.74 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -120,8 +120,27 @@ screen order: a panel's title, its text, then its buttons.
                       Enter twice moves him; you hear "Moving to Lothern."
                       and later "Tyrion arrived at Lothern." (or where he
                       stopped). Backspace or "Close" leaves the list.
-                      Enemy settlements are listed ("at war") but attacking
-                      is not supported yet.
+                      Enemies at war are listed too: their settlements
+                      ("Glittering Tower, button, Cult of Excess, at war")
+                      and the 5 nearest enemy armies ("Malus's army,
+                      button, Har Ganeth, at war, 7 units"). Enter asks
+                      "Attack Glittering Tower with Tyrion?"; Enter again
+                      attacks.
+
+BATTLES (auto resolve)
+When your army reaches the enemy, the pre-battle screen is read: the place,
+"Battle Result, Decisive Victory", "Casualties, Low", the buttons, then both
+armies' units ("Spear Infantry, list item, 30 soldiers").
+  Auto-resolve        A finds it; Enter twice fights the battle for you.
+  Fight Battle        not supported (battles are auto resolved); so is
+                      Scout terrain. Break Siege, Encircle and the other
+                      buttons ask first.
+The result is read next: "Decisive Victory", "Your side, deployed 116, lost
+14, remaining 102, enemy captured 15", "Enemy side, ...", each unit with its
+soldiers and kills. Accept (Enter twice) continues.
+After taking a settlement you choose what to do with it: "Occupy, button,
+Conquest penalty -10, Province instability -3, You occupy the settlement and
+all captives are killed.", "Loot & Occupy", "Sack", "Raze". Enter twice.
 
 When a panel opens or closes you hear "Screen updated." and the reader moves
 to the new panel's title or first new item. Advisor and notification text is
@@ -180,7 +199,8 @@ THINGS TO TRY (in a new campaign)
    needs dismissing first. Ending a turn makes the game autosave.
 
 NOT SUPPORTED YET
-Attacking, moving heroes (agents) or fleets at sea, battles, diplomacy
+Fighting battles yourself, declaring war, moving heroes (agents) or fleets
+at sea, diplomacy
 screens beyond reading, changing game settings, and co-op. Many panels are
 read but their buttons may say "Not supported yet." Reading order inside
 some panels is still rough.

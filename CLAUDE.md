@@ -28,6 +28,13 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
+- `docs/ATTACKS_0_6_74.md` — 0.6.74: F7 attacks enemies at war (settlements,
+  nearest armies) with the game's attack orders; the pre-battle, results and
+  Settlement Captured screens are read (HUD hidden); Auto-resolve and every
+  battle choice ask first; Fight Battle / Scout terrain refused; Game Menu
+  buttons once; Ctrl+Backspace dismissed a real Mission Issued!; Exit to
+  Windows verified. Installed and live-tested on this PC; not published.
+
 - `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is not
   responding." when the heartbeat stops over 5 s with the game in front, and "The
   game is responding again."; the mod marks loading/movies/teardown
@@ -218,7 +225,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.73; before it 0.6.70, backup `work/preinstall-0.6.73-b431ed22`) as the rollback.
+- Preserve the last known working build (0.6.74; before it 0.6.73, backup `work/preinstall-0.6.74-7477ea96`) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.
@@ -234,9 +241,12 @@ Ending a turn makes the game autosave (save_games); tell the owner.
 Lord selection and Start Campaign (always confirmed) are unblocked (owner,
 October 29). Before a live campaign start, back up save_games and
 advice_history. Campaign HUD buttons and tabs are allowed (End Turn/Quit/Exit/Load confirmed).
-Army movement is unblocked (owner, Nov 1: F6/F7 move list); attacks, other
-map orders, changing settings and co-op stay blocked unless the owner
-explicitly unblocks them. Battles will be auto resolved (owner decision).
+Army movement is unblocked (owner, Nov 1: F6/F7 move list). Attacks are
+unblocked (owner, Nov 3: "go ahead and do all this" on attacks and
+auto-resolve battles, each step asking first); fighting a battle yourself
+stays blocked: battles are auto resolved (owner decision). Other map orders,
+declaring war, changing settings and co-op stay blocked unless the owner
+explicitly unblocks them.
 **Campaign model access:** only inside the one repeating game timer
 (`cm:repeat_callback`, registered at the first tick) — never read the model
 or register a game timer from the reader's `real_timer` callback (live:

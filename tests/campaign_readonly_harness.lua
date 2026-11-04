@@ -828,7 +828,7 @@ do
     assert(heard('Move Tyrion, 100 percent movement, 2 of 3 places this turn.'),contents('bridge.jsonl'))
     assert(said()=='Tor Elasor, button, yours, this turn, 1 of 4',said())
     send('next'); assert(said()=="Vaul's Anvil, button, Har Ganeth, at war, this turn, 2 of 4",said())
-    send('activate'); assert(said()=='Attacking is not supported yet.' and #orders==0,said())
+    send('activate'); assert(said()=="Attack Vaul's Anvil with Tyrion? Press Enter again to confirm." and #orders==0,said())
     send('next'); assert(said()=='Far Away, button, Ellyrion, more than a turn, 3 of 4',said())
     send('next'); assert(said()=='Close, button, 4 of 4',said())
     send('back'); assert(said()=='Move list closed.' or heard('Move list closed.'),said())
@@ -900,6 +900,45 @@ do
     fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
     send('moves'); assert(heard('Move Tyrion, 100 percent movement, 2 of 4 places this turn.'),contents('bridge.jsonl'))
     fire('ShortcutTriggered',{string='script_F4'}); assert(said()=='Move Tyrion to Tor Elasor? Press Enter again to confirm.',said())
+    send('back')
+    -- 0.6.74 attacks (owner, Nov 3): the nearest enemy army is listed; Enter
+    -- asks, the second Enter gives the game's own attack order.
+    local raider=lord(31,'names_raider',125,100)
+    function raider:faction() return def end
+    function raider:in_settlement() return false end
+    names.names_raider='Malus'
+    function hef:factions_at_war_with() return list({def}) end
+    function def:character_list() return list({raider}) end
+    model.character_can_reach_character=function(_,a,b) return b==raider end
+    cm.get_character_by_cqi=function(_,cqi) if cqi==5 then return tyrion elseif cqi==31 then return raider end; return cavill end
+    fire('CharacterSelected',{character=function() return tyrion end})
+    local count=#orders
+    send('moves'); assert(heard('Move Tyrion, 100 percent movement, 3 of 5 places this turn.'),contents('bridge.jsonl'))
+    send('letter:m'); assert(said()=="Malus's army, button, Har Ganeth, at war, 7 units, this turn, 3 of 6",said())
+    -- Without the game's attack command: said, no order.
+    send('activate'); assert(said()=="Attack Malus's army with Tyrion? Press Enter again to confirm.",said())
+    send('activate'); assert(said()=='Attacking is not available here.' and #orders==count,said())
+    cm.game_interface={join_garrison=function() end,attack=function() end,attack_region=function() end}
+    cm.attack=function(_,a,d,q) orders[#orders+1]={'attack',a,d,q} end
+    cm.attack_region=function(_,a,r,q) orders[#orders+1]={'attack_region',a,r,q} end
+    send('moves','letter:m','activate','activate')
+    local o=orders[#orders]
+    assert(#orders==count+1 and o[1]=='attack' and o[2]=='character_cqi:5' and o[3]=='character_cqi:31' and o[4]==true,'The game attack order')
+    assert(said()=="Attacking Malus's army.",said())
+    tyrion.x=124; tick(1); tick(3)
+    assert(not heard("Tyrion arrived at Malus's army.") and not heard("Tyrion stopped on the way to Malus's army."),'The battle screen is read instead')
+    -- A settlement at war: attack_region.
+    tyrion.x=120
+    send('moves','letter:v'); assert(said()=="Vaul's Anvil, button, Har Ganeth, at war, this turn, 2 of 6",said())
+    send('activate','activate')
+    o=orders[#orders]
+    assert(o[1]=='attack_region' and o[2]=='character_cqi:5' and o[3]=='vauls_anvil' and o[4]==true,'The game attack_region order')
+    assert(said()=="Attacking Vaul's Anvil.",said())
+    -- Short of the target: said where he stopped.
+    tyrion.x=115; tick(1); tick(3)
+    assert(heard("Tyrion stopped on the way to Vaul's Anvil, 100 percent movement left."),contents('bridge.jsonl'))
+    -- A neutral settlement is a move, never an attack.
+    send('moves','letter:f','activate'); assert(said()=='Move Tyrion to Far Away? Press Enter again to confirm.',said())
     send('back')
 end
 -- With the game's timer: one repeating game callback, registered at the first
@@ -1065,16 +1104,114 @@ do
         else assert(dispatches==0,'Unsafe quit: ' .. condition) end
     end
 end
+-- 0.6.74: every Game Menu button (live tree: button_txt empty, label in a
+-- child named string) is one item named by its label, not two.
+do
+    local make=start('campaign',nil,2)
+    local button=nodes['tree.child0.child0']
+    button.id='button_resume'; button.label=''; button.count=2
+    make('tree.child0.child0.child0','button_txt',0,'')
+    make('tree.child0.child0.child1','string',0,'Resume Game')
+    begin(); tick(12)
+    local log=contents('bridge.jsonl')
+    assert(log:find('Resume Game, button',1,true),log)
+    assert(not log:find('"text":"Resume, button',1,true) and not log:find('Resume Game, 2 of',1,true),'No duplicate item: ' .. log)
+end
+-- 0.6.74: the pre-battle panel. Fighting the battle yourself is refused
+-- (battles are auto resolved); Auto Resolve asks first, then one click.
+do
+    local make=start('campaign',nil,1)
+    local panel=nodes['tree.child0.child0']
+    panel.id='popup_pre_battle'; panel.label=''; panel.count=1
+    make('tree.child0.child0.child0','button_set_attack',2,'')
+    make('tree.child0.child0.child0.child0','button_attack',0,'Attack')
+    make('tree.child0.child0.child0.child1','button_autoresolve',0,'Auto Resolve')
+    begin(); tick(12)
+    local function last() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
+    local function go(prefix)
+        for _=1,6 do if (last() or ''):sub(1,#prefix)==prefix then return true end; fire('ShortcutTriggered',{string='script_F2'}) end
+        return (last() or ''):sub(1,#prefix)==prefix
+    end
+    assert(go('Attack, button'),contents('bridge.jsonl'))
+    fire('ShortcutTriggered',{string='script_F4'}); fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==0 and last()=='Fighting the battle yourself is not supported. Choose Auto-resolve.',last())
+    assert(go('Auto Resolve, button'),contents('bridge.jsonl'))
+    fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==0 and last()=='Auto Resolve? Press Enter again to confirm.',last())
+    fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==1 and clicked=='tree.child0.child0.child0.child1','Auto Resolve clicked once: ' .. tostring(clicked))
+end
+-- 0.6.74 live: the game hides the HUD (layout) while the pre-battle panel is
+-- open at the root; the panel is read anyway. HUD hidden alone is not read.
+do
+    local make=start('campaign',nil,2)
+    begin(); tick(12)
+    local before=contents('bridge.jsonl')
+    nodes['tree.child0'].visible=false; tick(6)
+    assert(contents('bridge.jsonl')==before,'Hidden HUD alone: nothing new is read')
+    nodes.tree.count=5
+    make('tree.child4','popup_pre_battle',1,'')
+    make('tree.child4.child0','button_autoresolve',0,'Auto Resolve')
+    tick(12)
+    assert(contents('bridge.jsonl'):find('Auto Resolve, button',1,true),'The battle panel is read: ' .. contents('bridge.jsonl'))
+end
+-- 0.6.74 live shapes: battle results row and unit card, Settlement Captured option.
+do
+    local make=start('campaign',nil,1)
+    local function tip(node,text) node.GetTooltipText=function() return text end; return node end
+    local panel=nodes['tree.child0.child0']; panel.id='popup_battle_results'; panel.label=''; panel.count=2
+    make('tree.child0.child0.child0','details_table',1,'')
+    make('tree.child0.child0.child0.child0','list_box',1,'')
+    make('tree.child0.child0.child0.child0.child0','row_example',3,'')
+    make('tree.child0.child0.child0.child0.child0.child0','dy_deployed',0,'116')
+    make('tree.child0.child0.child0.child0.child0.child1','dy_lost',0,'14')
+    make('tree.child0.child0.child0.child0.child0.child2','dy_remaining',0,'102')
+    make('tree.child0.child0.child1','commander_header_0',1,'')
+    make('tree.child0.child0.child1.child0','units',1,'')
+    tip(make('tree.child0.child0.child1.child0.child0','wh2_main_hef_inf_spearmen_0',2,''),'Spearmen')
+    tip(make('tree.child0.child0.child1.child0.child0.child0','unit_category_icon',0,''),'Spear Infantry')
+    make('tree.child0.child0.child1.child0.child0.child1','unit_strength_number',0,'22')
+    begin(); tick(12)
+    for _=1,4 do fire('ShortcutTriggered',{string='script_F2'}) end
+    local log=contents('bridge.jsonl')
+    assert(log:find('Your side, deployed 116, lost 14, remaining 102',1,true),log)
+    assert(log:find('Spearmen, list item, Spear Infantry, 22 soldiers',1,true),log)
+end
+do
+    local make=start('campaign',nil,1)
+    local function tip(node,text) node.GetTooltipText=function() return text end; return node end
+    local panel=nodes['tree.child0.child0']; panel.id='settlement_captured'; panel.label=''; panel.count=1
+    make('tree.child0.child0.child0','button_parent',1,'')
+    make('tree.child0.child0.child0.child0','1063',2,'')
+    make('tree.child0.child0.child0.child0.child0','frame',1,'')
+    make('tree.child0.child0.child0.child0.child0.child0','icon_parent',1,'')
+    tip(make('tree.child0.child0.child0.child0.child0.child0.child0','dy_public_order',0,'-10'),'Conquest penalty||This is the penalty.')
+    tip(make('tree.child0.child0.child0.child0.child1','option_button',2,''),'You occupy the settlement and all captives are killed.')
+    make('tree.child0.child0.child0.child0.child1.child0','button_txt',0,'')
+    make('tree.child0.child0.child0.child0.child1.child1','dy_option',0,'Occupy')
+    begin(); tick(12)
+    local function last() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
+    for _=1,6 do if (last() or ''):sub(1,15)=='Occupy, button,' then break end; fire('ShortcutTriggered',{string='script_F2'}) end
+    assert((last() or ''):sub(1,38)=='Occupy, button, Conquest penalty -10, ' and (last() or ''):sub(-54)=='You occupy the settlement and all captives are killed.',contents('bridge.jsonl'))
+    fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==0 and last()=='Occupy? Press Enter again to confirm.',last())
+    fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==1 and clicked=='tree.child0.child0.child0.child0.child1','Clicks the option card\'s own button: ' .. tostring(clicked))
+end
 -- Ctrl+Backspace dismisses only known notification controls, one per press.
 do
-    for _,condition in ipairs({'advice','skip','none','disabled','hidden','replaced','stale','overlay','repeat','notice','changednotice'}) do
+    for _,condition in ipairs({'advice','skip','none','disabled','hidden','replaced','stale','overlay','repeat','notice','changednotice','notice-advisor'}) do
         local make=start('campaign',nil,1)
         nodes.tree.count=5
         local panel=make('tree.child4',condition=='skip' and 'notification_frame' or 'advice_interface',1,'')
         local button=make('tree.child4.child0',condition=='skip' and 'button_skip' or 'button_close',0,'')
-        if condition=='notice' or condition=='changednotice' then
+        if condition=='notice' or condition=='changednotice' or condition=='notice-advisor' then
             panel.id='event_dialog'; panel.count=2; button.id='button_accept'
             make('tree.child4.child1','dy_title',0,'How They Play')
+        end
+        if condition=='notice-advisor' then
+            -- 0.6.74 live: the advisor sits on a higher layer than the notice; it does not block.
+            nodes.tree.count=6; make('tree.child5','advice_interface',1,''); make('tree.child5.child0','button_close',0,'')
         end
         if condition=='none' then panel.id='game_menu' end
         begin(); tick(12)
@@ -1095,7 +1232,7 @@ do
             nodes.tree.count=6; make('tree.child5','game_menu',0,'Game Menu')
         end
         send('dismiss',condition=='stale')
-        if condition=='advice' or condition=='skip' or condition=='repeat' or condition=='notice' then
+        if condition=='advice' or condition=='skip' or condition=='repeat' or condition=='notice' or condition=='notice-advisor' then
             assert(dispatches==1 and clicked=='tree.child4.child0',condition .. ': ' .. tostring(said()))
             if condition=='repeat' then send('dismiss'); assert(dispatches==1,'Cannot click again before re-reading') end
         else assert(dispatches==0,'Unsafe dismissal: ' .. condition) end

@@ -31,7 +31,7 @@ if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player
 -- os.clock makes it unique: the companion drops speech from a retired
 -- session, and a table address alone can repeat in a later campaign load.
 local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
-local version='0.6.73'
+local version='0.6.74'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -73,6 +73,7 @@ local last_request_raw,last_readiness
 local reported_limits={}
 local publish_status,request_capture
 local captured_signature,previous_keys,refresh_announce,changed_ticks,last_signature=nil,{},false,0,nil
+local signature_logs,last_unavailable=0,nil
 local focus_key,post_click,previous_count=nil,nil,0
 local menu -- upgrade options read from the construction popup -- the item to return to after a re-read; re-read once after a click
 local function remember_entries()
@@ -150,6 +151,8 @@ local function text(value) return type(value)=='string' and bounded(value,4000) 
 -- showed this hidden while cinematic_bars was visible.
 local signature_skip={Tooltip=true,['3d_ui_parent']=true,character_map_path_icons=true,
     watermark_square=true,black_fade=true,cinematic_bars=true}
+-- Battle panels the game opens at the root while it hides the HUD.
+local battle_panels={popup_pre_battle=true,popup_battle_results=true,settlement_captured=true}
 local function hud_context()
     if not core:is_ui_created() then return nil,'ui-not-created' end
     local parts={}
@@ -159,7 +162,7 @@ local function hud_context()
     local _,visible=read(function() local v=root:Visible(true); return v end)
     local _,count=read(function() local v=root:ChildCount(); return v end)
     if id~='root' or visible~=true or type(count)~='number' or count<0 or count>100 or count%1~=0 then return nil,'root-shape' end
-    local layout,layout_visible,bars,loading=nil,false,false,false
+    local layout,layout_visible,bars,loading,battle=nil,false,false,false,false
     for i=0,count-1 do
         local found,address=read(function() local v=root:Find(i); return v end)
         if not found or not address then return nil,'root-child-missing' end
@@ -173,11 +176,14 @@ local function hud_context()
             if layout then return nil,'duplicate-layout' end
             layout=node; layout_visible=shown
         elseif child_id=='cinematic_bars' and shown then bars=true
-        elseif (child_id=='campaign' or child_id=='custom_loading_screen') and shown then loading=true end
+        elseif (child_id=='campaign' or child_id=='custom_loading_screen') and shown then loading=true
+        elseif battle_panels[child_id] and shown then battle=true end
     end
     if loading then return nil,'loading-screen' end
-    if bars then return nil,'cinematic-visible' end
-    if not layout or not layout_visible then return nil,'hud-hidden' end
+    -- 0.6.74: the game hides its HUD (and may show cinematic bars) while a
+    -- battle panel is open; the panel is then what there is to read.
+    if bars and not battle then return nil,'cinematic-visible' end
+    if not layout or (not layout_visible and not battle) then return nil,'hud-hidden',table.concat(parts,',') end
     local root_address,layout_address=identity(root),identity(layout)
     if not root_address or not layout_address then return nil,'identity-unavailable' end
     return {root=root,root_address=root_address,layout_address=layout_address,count=count,signature=table.concat(parts,',')}
@@ -268,6 +274,19 @@ local function composite_kind(id,ids,depth)
     if ids[depth-1]=='dynamic_stats' and id:match('^stat%d+$') then return 'stat' end
     if id:sub(1,9)=='checkbox_' then return 'checkbox' end
     local parent,grand=ids[depth-1],ids[depth-2]
+    -- 0.6.74 battle panels: a unit card ("Spearmen": category, soldiers, kills)
+    -- and a battle results row (deployed, lost, remaining, captured) are one item each.
+    if parent=='units' and type(grand)=='string' and grand:sub(1,17)=='commander_header_' then return 'battleunit' end
+    if parent=='button_parent' then
+        for _,ancestor in ipairs(ids) do if ancestor=='settlement_captured' then return 'option' end end
+    end
+    -- Campaign Load Game: one list item per save (name, difficulty, turn, date).
+    if id=='save_game' and parent=='list_box' then
+        for _,ancestor in ipairs(ids) do if ancestor=='load_save_game' then return 'save' end end
+    end
+    if parent=='list_box' and (id=='row_example' or id:match('^result_entry%d+$')) then
+        for _,ancestor in ipairs(ids) do if ancestor=='details_table' then return 'result' end end
+    end
     if parent=='list_box' then
         -- Lord types in the Recruit Lord panel (Legendary Lords, Prince, Princess).
         for _,ancestor in ipairs(ids) do if ancestor=='lord_parent' then return 'lordtype' end end
@@ -291,7 +310,7 @@ local function add_state(entry,value)
     for _,known in ipairs(entry.states) do if known==value then return end end
     entry.states[#entry.states+1]=value
 end
-local function contribute(entry,id,name,tip_name,state,parent)
+local function contribute(entry,id,name,tip_name,state,parent,item)
     if entry.kind=='character' then
         -- Lords & Heroes row: "Tyrion, list item, Legendary Lord, faction leader, rank 1, 116 soldiers".
         if id=='dy_character_name' and name~='' then entry.name=name
@@ -299,6 +318,34 @@ local function contribute(entry,id,name,tip_name,state,parent)
         elseif id=='faction_leader' and state=='leader' then add_state(entry,'faction leader')
         elseif id=='dy_rank' and name~='' then add_state(entry,'rank ' .. name)
         elseif id=='soldiers' and name~='' then add_state(entry,name .. ' soldiers') end
+        return
+    elseif entry.kind=='battleunit' then
+        if id=='unit_category_icon' and tip_name~='' then if entry.name=='' then entry.name=tip_name else entry.value=tip_name end
+        elseif id=='unit_strength_number' and name~='' then add_state(entry,name .. (name=='1' and ' soldier' or ' soldiers'))
+        elseif id=='label_kills' and name~='' then add_state(entry,'kills ' .. name)
+        elseif id=='experience' and type(state)=='string' and state:match('^%d+$') and state~='0' then add_state(entry,'rank ' .. state) end
+        return
+    elseif entry.kind=='option' then
+        -- Settlement Captured: one button per choice; Enter clicks the card's own button.
+        if id=='option_button' and item then
+            entry.path,entry.ids,entry.id=item.path,item.ids,id
+            entry.idpath=table.concat(item.ids,'/') .. '/' .. id
+            entry.description=tip_name
+        elseif id=='dy_option' and name~='' then entry.name=name
+        elseif parent=='icon_parent' and name~='' then
+            local label=id=='dy_income' and 'Income' or tip_name
+            if label~='' then add_state(entry,label .. ' ' .. name) end
+        end
+        return
+    elseif entry.kind=='save' then
+        if id=='name' and name~='' then entry.name=name
+        elseif id=='dy_difficulty' and name~='' then add_state(entry,name)
+        elseif id=='turn' and name~='' then add_state(entry,'turn ' .. name)
+        elseif id=='save_date' and name~='' then add_state(entry,name) end
+        return
+    elseif entry.kind=='result' then
+        local column={dy_deployed='deployed',dy_lost='lost',dy_remaining='remaining',dy_captured='enemy captured'}
+        if column[id] and name~='' then add_state(entry,column[id] .. ' ' .. name) end
         return
     elseif entry.kind=='unit' then
         -- Army unit card: "Spearmen, list item, Spear Infantry, strength 30".
@@ -398,6 +445,19 @@ local function arrange_entries()
     end
     for _,entry in ipairs(minimap) do ordered[#ordered+1]=entry end
     if #ordered==#entries then entries=ordered end
+    -- 0.6.74: a label ending in a colon ("Battle Result:") takes the text inside
+    -- it as its value: "Battle Result, Decisive Victory".
+    local joined={}
+    for _,entry in ipairs(entries) do
+        local previous=joined[#joined]
+        local parent=entry.ids and entry.path and entry.ids[#entry.path-1]
+        if previous and parent and previous.id==parent and not entry.kind and not previous.kind
+            and entry_role(previous)==nil and entry_role(entry)==nil and (previous.value or '')=='' and (entry.value or '')==''
+            and type(previous.name)=='string' and previous.name:sub(-1)==':' then
+            previous.name=previous.name:sub(1,-2); previous.value=entry.name
+        else joined[#joined+1]=entry end
+    end
+    entries=joined
 end
 local function strip_levels(label,levels)
     for _=1,levels do label=label:gsub('%.child%d+$','') end
@@ -437,9 +497,10 @@ local function verify_reader()
 end
 -- Labels for HUD elements whose own text is only a value or whose tooltip is
 -- a warning rather than a name (from the 0.6.32 live capture).
-local value_labels={dy_income='Income',counter='Unresolved events',dy_growth='Growth'}
+local value_labels={dy_income='Income',counter='Unresolved events',dy_growth='Growth',dy_rank='Rank'}
 -- "Growth:" sits beside its value (dy_growth, read as "Growth, 0/600 (+20)").
-local dropped_labels={tx_growth=true,hit_points=true}
+-- The battle results table's column headers are part of each row's item (0.6.74).
+local dropped_labels={tx_growth=true,hit_points=true,deployed_tx=true,lost_tx=true,remaining_tx=true,captured_tx=true}
 local help_hint='Left-click to open Help pages.'
 local religion_names={untainted='Untainted',chaos='Chaos corruption',undeath='Vampiric corruption',skaven='Skaven corruption'}
 local function religion_label(id)
@@ -520,7 +581,7 @@ local function page_read()
                 local group,kind=item.group,nil
                 if group then
                     -- Part of a province row or building: fold it into that item.
-                    contribute(group,id,name,tip_name,state,parent)
+                    contribute(group,id,name,tip_name,state,parent,item)
                 else kind=composite_kind(id,item.ids,depth) end
                 if kind and #entries>=512 then limit('entry-budget',item.label,#entries)
                 elseif kind then
@@ -548,6 +609,20 @@ local function page_read()
                         add_state(entry,(state=='selected' or state=='selected_hover' or state=='selected_down') and 'checked' or 'not checked')
                     elseif kind=='unit' then
                         entry.role='list item'; entry.name=tip_name; entry.read_only=true; entry.group_key='army'
+                    elseif kind=='battleunit' then
+                        -- Tooltip: the unit's name, then why it is gone ("... has been disbanded.").
+                        entry.role='list item'; entry.read_only=true
+                        local first=(type(tip)=='string' and tip or ''):match('^([^\n]*)') or ''
+                        entry.name=clean(first)
+                        if type(tip)=='string' and tip:match('disbanded') then add_state(entry,'disbanded') end
+                    elseif kind=='option' then entry.role='button'; entry.name=''
+                    elseif kind=='save' then
+                        -- The tooltip says why a save cannot be loaded ("You cannot load this save game").
+                        entry.role='list item'; entry.name=''; entry.description=tip_name
+                        if state=='selected' then add_state(entry,'selected') end
+                        if tip_name:match('cannot') then add_state(entry,'unavailable') end
+                    elseif kind=='result' then
+                        entry.read_only=true; entry.name=id=='row_example' and 'Your side' or 'Enemy side'
                     elseif kind=='lordtype' then
                         entry.role='tab'; entry.name=(id:gsub('_',' '))
                         if state=='selected' then add_state(entry,'selected') end
@@ -578,6 +653,8 @@ local function page_read()
                     entry_name,value=religion_label(id),name
                 end
                 if dropped_labels[id] then entry_name='' end
+                -- A unit card's bar, labelled only by its "Health" tooltip: the soldier count belongs to the unit (0.6.74).
+                if id=='health_bar' and name=='' and tip_name=='Health' then entry_name='' end
                 if description==help_hint then description='' end
                 if id=='dy_province' and name~='' then
                     -- A settlement's name above its building slots.
@@ -588,9 +665,10 @@ local function page_read()
                 local derived=false
                 if entry_name=='' and not group and (state=='active' or state=='hover' or state=='selected' or state=='down') then entry_name=button_name(id,item.ids); derived=entry_name~='' end
                 -- A button's own label element ("Recruit" inside Recruit) is not a second item.
+                -- Game Menu buttons (button_resume … button_quit) hold their label in a child named string.
                 local owner=item.owner
                 if owner and not group and parent~='button_focus' and (id=='button_txt' or id=='dy_txt'
-                    or (id=='string' and parent=='button_windows')) then
+                    or (id=='string' and type(parent)=='string' and parent:sub(1,7)=='button_')) then
                     if name~='' and owner.derived then owner.name=name; owner.derived=false end
                     entry_name=''
                 end
@@ -601,6 +679,11 @@ local function page_read()
                     entry_name,value=name_labels[id],(name~='' and name~=tooltip) and name or ''
                 elseif value_labels[id] and value=='' and name~='' then entry_name,value=value_labels[id],name end
                 local previous=entries[#entries]
+                -- 0.6.74: a bare number explained by its tooltip ("Turns remaining until the
+                -- settlement surrenders.") is named by it: "Turns remaining …, 10".
+                if is_number(entry_name) and value=='' and description~='' and not group then
+                    entry_name,value,description=(description:gsub('%.$','')),entry_name,''
+                end
                 if punctuation[entry_name] and value=='' then entry_name=''
                 elseif value=='' and description=='' and is_number(entry_name) and previous and (previous.value or '')=='' and not previous.states then
                     -- A bare count belongs to the item before it: "Missions, 1".
@@ -1199,6 +1282,15 @@ local function switch_selection(next_lord)
             local d=(info.key==here) and -1 or (x and info.x and distance(x,y,info.x,info.y)) or math.huge
             if not best_distance or d<best_distance then best,best_distance=info,d end
         end
+        -- 0.6.74 live: the Provinces list row selects the province's capital, so a
+        -- minor settlement (Glittering Tower) is announced as the capital the game selects.
+        local _,capital=read(function() local v=best.region:is_province_capital(); return v end)
+        if capital==false then
+            for _,info in ipairs(regions) do
+                local _,other=read(function() local v=info.region:is_province_capital(); return v end)
+                if other==true and info.province==best.province then best=info end
+            end
+        end
         choose(settlement_target(best)); return
     end
     if #lords==0 then speak('You have no lords with armies.'); return end
@@ -1217,6 +1309,47 @@ local function switch_selection(next_lord)
         end
     end
     choose(lord_target(chosen))
+end
+-- In the game's callback: up to five enemy armies nearest the lord, as move
+-- list options (kind 'enemy_army'). Their order key sorts them after the
+-- settlements at the same reach.
+local function enemy_armies(faction,game,lord,ap,lx,ly)
+    local found={}
+    local ok,enemies=read(function() local v=faction:factions_at_war_with(); return v end)
+    for _,enemy in ipairs(ok and enemies and list_items(enemies) or {}) do
+        local _,enemy_key=read(function() local v=enemy:name(); return v end)
+        local faction_name=localised('factions_screen_name_' .. tostring(enemy_key)) or 'another faction'
+        local _,chars=read(function() local v=enemy:character_list(); return v end)
+        for _,char in ipairs(chars and list_items(chars) or {}) do
+            local _,general=read(function() local v=char:character_type('general'); return v end)
+            local _,army=read(function() local v=char:has_military_force(); return v end)
+            local _,citizens=read(function() local v=army==true and char:military_force():is_armed_citizenry(); return v end)
+            local _,inside=read(function() local v=char:in_settlement(); return v end)
+            local _,cqi=read(function() local v=char:cqi(); return v end)
+            local x,y=position(char)
+            if general==true and army==true and citizens~=true and inside~=true and type(cqi)=='number' and x then
+                found[#found+1]={char=char,cqi=cqi,faction=faction_name,distance=distance(lx,ly,x,y),x=x,y=y}
+            end
+        end
+    end
+    table.sort(found,function(a,b) return a.distance<b.distance end)
+    local items={}
+    for i=1,math.min(#found,5) do
+        local army=found[i]
+        local name=lord_name(army.char)
+        local _,units=read(function() local v=army.char:military_force():unit_list():num_items(); return v end)
+        local reach=false
+        if ap>0 then
+            local got,value=read(function() local v=game:model():character_can_reach_character(lord.char,army.char); return v end)
+            reach=got and value==true
+        end
+        local states={army.faction .. ', at war'}
+        if type(units)=='number' then states[#states+1]=units .. (units==1 and ' unit' or ' units') end
+        states[#states+1]=reach and 'this turn' or 'more than a turn'
+        items[#items+1]={name=name .. "'s army",role='button',states=states,key='attack:' .. army.cqi,
+            target_cqi=army.cqi,target_name=name .. "'s army",place={x=army.x,y=army.y},kind='enemy_army',reach=reach,order=1000+i}
+    end
+    return items
 end
 -- In the game's callback: the places the selected lord can move to.
 local function open_moves()
@@ -1260,6 +1393,9 @@ local function open_moves()
                 key='move:' .. tostring(info.key),place=info,kind=kind,reach=reach,order=order}
         end
     end
+    -- 0.6.74: the nearest enemy armies (factions at war; armies inside a
+    -- settlement are attacked through the settlement).
+    for _,army in ipairs(enemy_armies(faction,game,lord,ap,lx,ly)) do items[#items+1]=army; if army.reach then reachable=reachable+1 end end
     if #items==0 then speak('No places found.'); return end
     -- Places reachable this turn first, nearest first in each group.
     table.sort(items,function(a,b) if a.reach~=b.reach then return a.reach end; return a.order<b.order end)
@@ -1320,17 +1456,48 @@ local function give_order(lord,option)
     speak((option.reach and 'Moving to ' or 'Moving toward ') .. option.name .. '.')
     moving={cqi=lord.cqi,name=lord.name,dest=option.name,x=sx,y=sy,x0=x,y0=y,last_x=x,last_y=y,still=0,started=ticks,moved=false,retried=false}
 end
+-- In the game's callback: the confirmed attack (owner, Nov 3: attacks
+-- unblocked; battles are auto resolved). The game's own attack orders, as its
+-- scripts give them: attack_region for a settlement, attack for an army.
+local function give_attack(lord,option)
+    local faction,why,game=player_faction(); if not faction then speak(why); return end
+    local _,char=read(function() local v=game:get_character_by_cqi(lord.cqi); return v end)
+    local x,y
+    if char then x,y=position(char) end
+    if not x then speak(lord.name .. ' is no longer available.'); return end
+    local name=option.target_name or option.name
+    local method,target='attack_region',option.place and option.place.key
+    if option.kind=='enemy_army' then
+        local _,enemy=read(function() local v=game:get_character_by_cqi(option.target_cqi); return v end)
+        if not enemy or not position(enemy) then speak(name .. ' is no longer there.'); return end
+        method,target='attack','character_cqi:' .. option.target_cqi
+    end
+    if type(target)~='string' or type(game_command(game,method))~='function' then speak('Attacking is not available here.'); return end
+    local lookup='character_cqi:' .. lord.cqi
+    local ok,err=pcall(function()
+        pcall(function() game:enable_movement_for_character(lookup) end)
+        if method=='attack' then game:attack(lookup,target,true) else game:attack_region(lookup,target,true) end
+    end)
+    emit('{"kind":"order-run","method":' .. quoted(method) .. ',"cqi":' .. lord.cqi .. ',"target":' .. quoted(target)
+        .. ',"ok":' .. tostring(ok) .. ',"error":' .. quoted(ok and '' or bounded(tostring(err),300)) .. '}')
+    if not ok then speak('Could not attack ' .. name .. '.'); return end
+    speak('Attacking ' .. name .. '.')
+    moving={cqi=lord.cqi,name=lord.name,dest=name,x=option.place.x,y=option.place.y,x0=x,y0=y,last_x=x,last_y=y,still=0,started=ticks,moved=false,retried=true,attack=true}
+end
 -- On the reader's timer: the move list's Enter (asks first).
 local function move_activate(option)
     if option.close then menu=nil; pending_confirm=nil; speak('Move list closed.'); browse(0,false); return end
-    if option.kind=='enemy' then speak('Attacking is not supported yet.'); return end
     local lord=menu.owner
+    local attack=option.kind=='enemy' or option.kind=='enemy_army'
     if not (pending_confirm and pending_confirm.key==option.key and ticks<=pending_confirm.until_tick) then
         pending_confirm={key=option.key,until_tick=ticks+10}
-        speak('Move ' .. lord.name .. ' to ' .. option.name .. '? Press Enter again to confirm.'); return
+        if attack then speak('Attack ' .. (option.target_name or option.name) .. ' with ' .. lord.name .. '? Press Enter again to confirm.')
+        else speak('Move ' .. lord.name .. ' to ' .. option.name .. '? Press Enter again to confirm.') end
+        return
     end
     pending_confirm=nil; menu=nil
-    model_call(function() give_order(lord,option) end)
+    if attack then model_call(function() give_attack(lord,option) end)
+    else model_call(function() give_order(lord,option) end) end
 end
 -- In the game's callback: say where the lord stopped (arrived, or how far he got).
 local function watch_moving()
@@ -1355,11 +1522,15 @@ local function watch_moving()
         end
         return
     end
+    -- An attack that reaches its target opens the battle screen, which is read
+    -- instead (the army may not move at all when the enemy is next to it).
+    local near=distance(x,y,moving.x,moving.y)<=(moving.attack and 5 or 3)
+    if moving.attack and near and (moving.still>=2 or elapsed>=9) then moving=nil; return end
     if not moving.moved and elapsed>=9 then speak(moving.name .. ' did not move.'); moving=nil; return end
     if (moving.moved and moving.still>=2) or elapsed>=60 then
         local _,ap=read(function() local v=char:action_points_remaining_percent(); return v end)
         ap=percent(ap)
-        if distance(x,y,moving.x,moving.y)<=3 then speak(moving.name .. ' arrived at ' .. moving.dest .. '.')
+        if near then speak(moving.name .. ' arrived at ' .. moving.dest .. '.')
         else speak(moving.name .. ' stopped on the way to ' .. moving.dest .. (ap and (', ' .. (ap==0 and 'no movement left' or (ap .. ' percent movement left'))) or '') .. '.') end
         moving=nil
     end
@@ -1387,6 +1558,17 @@ local function guarded(action,fn,...)
         menu=nil; pending_select=nil; speak('Could not do that.')
     end
 end
+local function under_panel(item,panel)
+    for _,id in ipairs(item.ids or {}) do if id==panel then return true end end
+    return false
+end
+-- 0.6.74: every choice around a battle asks first (Auto Resolve, retreat,
+-- siege, and what to do with a captured settlement or prisoners).
+local function battle_choice(item,id)
+    if under_panel(item,'popup_pre_battle') then return id~='button_info' and id:sub(1,7)=='button_' end
+    return under_panel(item,'settlement_captured') or under_panel(item,'button_set_settlement_captured')
+        or (under_panel(item,'popup_battle_results') and id~='button_dismiss' and id~='button_close' and id:sub(1,7)=='button_' and id~='button_info')
+end
 local function activate_current()
     if menu then
         if menu.kind=='move' then guarded('activate',move_activate,menu.items[menu.index]) else menu_activate() end
@@ -1397,9 +1579,15 @@ local function activate_current()
     local id=type(item.id)=='string' and item.id or ''
     local role=entry_role(item)
     if not activatable[role] or item.read_only or (role=='button' and id:sub(1,5)=='sort_') then speak('Not supported yet.'); return end
+    -- Battles are auto resolved (owner decision): the pre-battle panel's
+    -- button for fighting the battle yourself is never pressed.
+    if (id=='button_attack' or id=='button_preview_map') and under_panel(item,'popup_pre_battle') then
+        -- Scout terrain loads the battle map, like fighting it.
+        speak((id=='button_attack' and 'Fighting the battle yourself' or 'Scouting the battle map') .. ' is not supported. Choose Auto-resolve.'); return
+    end
     local node=fresh_node(item); if not node then return end
     if item.settlement then open_upgrades(item,node); return end
-    if (item.confirm or needs_confirmation(id)) and not (pending_confirm and pending_confirm.key==item.key and ticks<=pending_confirm.until_tick) then
+    if (item.confirm or needs_confirmation(id) or battle_choice(item,id)) and not (pending_confirm and pending_confirm.key==item.key and ticks<=pending_confirm.until_tick) then
         pending_confirm={key=item.key,until_tick=ticks+10}
         speak((item.confirm or item.name) .. '? Press Enter again to confirm.'); return
     end
@@ -1438,7 +1626,10 @@ local function dismiss_notification()
             or (advice and item.id=='button_close') and 2
             or (notification and item.id=='button_skip') and 1 or 0
         local level=item.path and item.path[1] or -1
-        if level>top_layer then top_layer=level end
+        -- 0.6.74 live: the advisor and the tutorial highlight sit above a
+        -- Mission Issued! notice; they do not cover it, so they never block.
+        local layer_id=item.ids and item.ids[1]
+        if level>top_layer and layer_id~='advice_interface' and layer_id~='tutorial_halo_group' then top_layer=level end
         if rank>priority or (rank>0 and rank==priority and level>layer) then target,priority,layer=item,rank,level end
     end
     if not target or layer<top_layer then speak('No dismissible notification.'); return end
@@ -1573,10 +1764,23 @@ local function tick()
             end
             -- Re-read automatically when the visible panels change and settle.
             if phase=='ready' or phase=='limited' or phase=='cancelled' then
-                local context=phase~='cancelled' and hud_context() or nil
+                local context,why,root_parts
+                if phase~='cancelled' then context,why,root_parts=hud_context() end
+                if not context and why and why~=last_unavailable then
+                    last_unavailable=why
+                    pcall(emit,'{"kind":"hud-unavailable","reason":' .. quoted(why) .. ',"root":' .. quoted(root_parts or '') .. '}')
+                elseif context then last_unavailable=nil end
                 local signature=context and panel_signature(context)
                 -- Changed, and the same for two seconds (blinking never settles).
                 local settled=signature and signature==last_signature
+                if signature and last_signature and not settled and signature_logs<40 then
+                    -- Which parts keep changing (a screen that never settles is never re-read).
+                    signature_logs=signature_logs+1
+                    local old,diff={},{}
+                    for part in last_signature:gmatch('[^,]+') do old[part]=true end
+                    for part in signature:gmatch('[^,]+') do if not old[part] and #diff<8 then diff[#diff+1]=part end end
+                    pcall(emit,'{"kind":"signature-change","new":' .. quoted(table.concat(diff,' ')) .. '}')
+                end
                 last_signature=signature
                 if phase=='cancelled' or (signature and signature~=captured_signature and settled) then
                     changed_ticks=changed_ticks+1
