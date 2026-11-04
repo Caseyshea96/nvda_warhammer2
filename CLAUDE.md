@@ -33,7 +33,7 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
   Settlement Captured screens are read (HUD hidden); Auto-resolve and every
   battle choice ask first; Fight Battle / Scout terrain refused; Game Menu
   buttons once; Ctrl+Backspace dismissed a real Mission Issued!; Exit to
-  Windows verified. Installed and live-tested on this PC; not published.
+  Windows verified. Installed, live-tested on this PC, published as release v0.6.74.
 
 - `docs/BUSY_NOTICE_0_6_73.md` — 0.6.73: the companion says "The game is not
   responding." when the heartbeat stops over 5 s with the game in front, and "The

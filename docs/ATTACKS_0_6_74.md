@@ -109,3 +109,11 @@ Harness: 416 frontend, 80 campaign scenarios (+ attack orders, enemy armies
 in F7, neutral targets stay moves, pre-battle refusal and Auto-resolve
 confirm, hidden HUD with a battle panel, results row, unit card, capture
 option click, Game Menu fold, notice under the advisor).
+
+## Published
+
+Owner's go-ahead (Nov 3): release **v0.6.74**
+(https://github.com/Caseyshea96/nvda_warhammer2/releases/tag/v0.6.74, ZIP +
+`.sha256`). The downloaded ZIP matches the local build; the installed Update
+shortcut script says "Version 0.6.74 is installed; the newest release is
+0.6.74. Nothing to update."
