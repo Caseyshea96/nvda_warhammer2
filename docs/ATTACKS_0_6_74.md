@@ -83,7 +83,8 @@ twice on "End turn" (a failed search; the script now never presses Enter
 unless the item was found): its tooltip was "Resolve or skip this
 notification to end turn", and it only jumped to Tyrion's "Lord not moved"
 notification; saves unchanged, treasury unchanged. A Windows Quick Settings
-panel also opened once during a run and took keys (cause unknown).
+panel opened once during a run (the owner was using the PC) and took two
+test keys; not caused by the mod or the test tools.
 
 ## Not verified / known gaps
 
