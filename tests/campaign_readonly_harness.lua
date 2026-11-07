@@ -842,6 +842,9 @@ do
     -- From the lord to the settlement he stands in.
     before=dispatches; send('lords')
     assert(dispatches==before+2 and clicked=='tree.child0.child3.child0.child1.child0.child0.child0.child1.child1','Opens Provinces, then clicks Tiranoc: ' .. tostring(clicked))
+    -- 0.6.75: named by the game's SettlementSelected event (what it actually selected).
+    assert(not heard('Tor Elasor, Tiranoc.'),'Waits for the game event')
+    fire('SettlementSelected',{garrison_residence=function() return {region=function() return tor end} end})
     assert(heard('Tor Elasor, Tiranoc.'),contents('bridge.jsonl'))
     -- From a settlement back to the nearest lord (list already open: one click).
     fire('SettlementSelected',{garrison_residence=function() return {region=function() return lothern end} end})
@@ -849,6 +852,10 @@ do
     before=dispatches; send('lords')
     assert(dispatches==before+1 and clicked=='tree.child0.child3.child0.child0.child0.child0.child1','Nearest lord to Lothern is Cavill: ' .. tostring(clicked))
     send('nextlord'); assert(clicked=='tree.child0.child3.child0.child0.child0.child0.child0','Shift+F6 goes to the next lord')
+    -- No SettlementSelected event within two seconds: the target is said instead.
+    local spoken_before=select(2,contents('bridge.jsonl'):gsub('Tor Elasor, Tiranoc%.',''))
+    tyrion.x,tyrion.y=112,100; send('lords'); for _=1,25 do tick(1) end
+    assert(select(2,contents('bridge.jsonl'):gsub('Tor Elasor, Tiranoc%.',''))==spoken_before+1,'Fallback summary after two seconds: ' .. contents('bridge.jsonl'))
     -- A lord missing from the list, a stray move order and multiplayer.
     names.names_tyrion='Somebody'; send('nextlord'); send('nextlord')
     assert(heard('Could not find Somebody in the Lords list.'),contents('bridge.jsonl'))
@@ -925,8 +932,15 @@ do
     local o=orders[#orders]
     assert(#orders==count+1 and o[1]=='attack' and o[2]=='character_cqi:5' and o[3]=='character_cqi:31' and o[4]==true,'The game attack order')
     assert(said()=="Attacking Malus's army.",said())
+    -- 0.6.75: the battle panel opening ends the watch quietly.
+    fire('PanelOpenedCampaign',{string='popup_pre_battle'})
     tyrion.x=124; tick(1); tick(3)
-    assert(not heard("Tyrion arrived at Malus's army.") and not heard("Tyrion stopped on the way to Malus's army."),'The battle screen is read instead')
+    assert(not heard("Tyrion arrived at Malus's army.") and not heard("Tyrion stopped on the way to Malus's army.")
+        and not heard("Tyrion stopped next to Malus's army; no battle started."),'The battle screen is read instead')
+    -- No battle panel: an attack that ends next to the target says so.
+    tyrion.x=120; send('moves','letter:m','activate','activate')
+    tyrion.x=123; tick(1); tick(3)
+    assert(heard("Tyrion stopped next to Malus's army; no battle started."),contents('bridge.jsonl'))
     -- A settlement at war: attack_region.
     tyrion.x=120
     send('moves','letter:v'); assert(said()=="Vaul's Anvil, button, Har Ganeth, at war, this turn, 2 of 6",said())
@@ -1077,6 +1091,7 @@ do
     assert(clicked=='tree.child0.child3.child0.child0.child0.child0.child0.child1.child0','The lord row inside the Lords section: ' .. tostring(clicked))
     send('lords')
     assert(clicked=='tree.child0.child3.child0.child1.child0.child0.child0.child0.child69','Province row 70 is found: ' .. tostring(clicked))
+    for _=1,25 do tick(1) end -- no game event in this fixture: the summary after two seconds
     assert(contents('bridge.jsonl'):find('Far City, Province Sixty-nine.',1,true),contents('bridge.jsonl'))
 end
 -- Live Game Menu: button_windows has a child named string, not button_txt.
@@ -1123,9 +1138,11 @@ do
     local make=start('campaign',nil,1)
     local panel=nodes['tree.child0.child0']
     panel.id='popup_pre_battle'; panel.label=''; panel.count=1
-    make('tree.child0.child0.child0','button_set_attack',2,'')
+    make('tree.child0.child0.child0','button_set_attack',3,'')
     make('tree.child0.child0.child0.child0','button_attack',0,'Attack')
     make('tree.child0.child0.child0.child1','button_autoresolve',0,'Auto Resolve')
+    -- 0.6.75: any other button (here an unknown sally-out button) is refused too.
+    make('tree.child0.child0.child0.child2','button_sally',0,'Sally Out')
     begin(); tick(12)
     local function last() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
     local function go(prefix)
@@ -1135,6 +1152,9 @@ do
     assert(go('Attack, button'),contents('bridge.jsonl'))
     fire('ShortcutTriggered',{string='script_F4'}); fire('ShortcutTriggered',{string='script_F4'})
     assert(dispatches==0 and last()=='Fighting the battle yourself is not supported. Choose Auto-resolve.',last())
+    assert(go('Sally Out, button'),contents('bridge.jsonl'))
+    fire('ShortcutTriggered',{string='script_F4'}); fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==0 and last()=='Sally Out is not supported. Choose Auto-resolve.',last())
     assert(go('Auto Resolve, button'),contents('bridge.jsonl'))
     fire('ShortcutTriggered',{string='script_F4'})
     assert(dispatches==0 and last()=='Auto Resolve? Press Enter again to confirm.',last())
@@ -1155,6 +1175,21 @@ do
     tick(12)
     assert(contents('bridge.jsonl'):find('Auto Resolve, button',1,true),'The battle panel is read: ' .. contents('bridge.jsonl'))
 end
+-- 0.6.75: when the game does not say the player attacked, the rows are numbered.
+do
+    local make=start('campaign',nil,1)
+    local panel=nodes['tree.child0.child0']; panel.id='popup_battle_results'; panel.label=''; panel.count=1
+    make('tree.child0.child0.child0','details_table',1,'')
+    make('tree.child0.child0.child0.child0','list_box',2,'')
+    make('tree.child0.child0.child0.child0.child0','row_example',1,'')
+    make('tree.child0.child0.child0.child0.child0.child0','dy_lost',0,'14')
+    make('tree.child0.child0.child0.child0.child1','result_entry1',1,'')
+    make('tree.child0.child0.child0.child0.child1.child0','dy_lost',0,'136')
+    begin(); tick(12)
+    for _=1,3 do fire('ShortcutTriggered',{string='script_F2'}) end
+    local log=contents('bridge.jsonl')
+    assert(log:find('Side 1, lost 14',1,true) and log:find('Side 2, lost 136',1,true),log)
+end
 -- 0.6.74 live shapes: battle results row and unit card, Settlement Captured option.
 do
     local make=start('campaign',nil,1)
@@ -1171,7 +1206,12 @@ do
     tip(make('tree.child0.child0.child1.child0.child0','wh2_main_hef_inf_spearmen_0',2,''),'Spearmen')
     tip(make('tree.child0.child0.child1.child0.child0.child0','unit_category_icon',0,''),'Spear Infantry')
     make('tree.child0.child0.child1.child0.child0.child1','unit_strength_number',0,'22')
-    begin(); tick(12)
+    -- The game says the player attacked (pending battle, read when the panel opens): "Your side".
+    local function faction(key) return {faction=function() return {name=function() return key end} end} end
+    cm={get_local_faction_name=function() return 'hef' end,model=function() return {pending_battle=function() return
+        {has_attacker=function() return true end,attacker=function() return faction('hef') end,
+         has_defender=function() return true end,defender=function() return faction('def') end} end} end}
+    begin(); fire('PanelOpenedCampaign',{string='popup_battle_results'}); tick(12)
     for _=1,4 do fire('ShortcutTriggered',{string='script_F2'}) end
     local log=contents('bridge.jsonl')
     assert(log:find('Your side, deployed 116, lost 14, remaining 102',1,true),log)
@@ -1197,6 +1237,20 @@ do
     assert(dispatches==0 and last()=='Occupy? Press Enter again to confirm.',last())
     fire('ShortcutTriggered',{string='script_F4'})
     assert(dispatches==1 and clicked=='tree.child0.child0.child0.child0.child1','Clicks the option card\'s own button: ' .. tostring(clicked))
+end
+-- 0.6.75: a capture option whose own button is not found is not pressable (no click on the card).
+do
+    local make=start('campaign',nil,1)
+    local panel=nodes['tree.child0.child0']; panel.id='settlement_captured'; panel.label=''; panel.count=1
+    make('tree.child0.child0.child0','button_parent',1,'')
+    make('tree.child0.child0.child0.child0','1063',2,'')
+    make('tree.child0.child0.child0.child0.child0','dy_option',0,'Occupy')
+    make('tree.child0.child0.child0.child0.child1','option_button',0,'',false)
+    begin(); tick(12)
+    local function last() return (contents('bridge.jsonl'):match('"text":"([^"]*)"}\n$')) end
+    for _=1,4 do if (last() or ''):sub(1,15)=='Occupy, button,' then break end; fire('ShortcutTriggered',{string='script_F2'}) end
+    fire('ShortcutTriggered',{string='script_F4'}); fire('ShortcutTriggered',{string='script_F4'})
+    assert(dispatches==0 and last()=='Not supported yet.',tostring(last()))
 end
 -- Ctrl+Backspace dismisses only known notification controls, one per press.
 do

@@ -37,6 +37,8 @@ FIRST INSTALL (or updating from 0.6.67 or earlier)
 EACH TIME YOU PLAY
 1. Start NVDA and Steam (signed in).
 2. Run the desktop shortcut "Warhammer NVDA Pilot" (or Start Pilot.cmd).
+   If NVDA restarts while you play, the helper reconnects by itself within
+   a few seconds and says "Speech reconnected."
    This small helper passes the mod's speech to NVDA and handles the keys
    below; keep it running. It tests speech, then starts the game itself
    with only the accessibility mod: no TW Mod Manager window. You hear
@@ -44,7 +46,7 @@ EACH TIME YOU PLAY
    loaded in this mode. Then "Intro movies playing. Press Escape to skip
    them.": they last about two minutes; the menu is not read until they end.
    When the main menu is ready you hear
-   "Warhammer accessibility 0.6.74 ready. Arrow keys move, Enter activates."
+   "Warhammer accessibility 0.6.75 ready. Arrow keys move, Enter activates."
    The number is the installed version; please mention it in feedback.
    If Steam was not running, the game opens through Steam instead: in TW
    Mod Manager make sure warhammer_access is ticked, then press Play.
@@ -132,11 +134,13 @@ When your army reaches the enemy, the pre-battle screen is read: the place,
 "Battle Result, Decisive Victory", "Casualties, Low", the buttons, then both
 armies' units ("Spear Infantry, list item, 30 soldiers").
   Auto-resolve        A finds it; Enter twice fights the battle for you.
-  Fight Battle        not supported (battles are auto resolved); so is
-                      Scout terrain. Break Siege, Encircle and the other
-                      buttons ask first.
+  Fight Battle        not supported (battles are auto resolved); neither are
+                      Scout terrain or any other button here except
+                      Auto-resolve, Break Siege, Encircle, Quick Save and
+                      Help, which ask first.
 The result is read next: "Decisive Victory", "Your side, deployed 116, lost
-14, remaining 102, enemy captured 15", "Enemy side, ...", each unit with its
+14, remaining 102, enemy captured 15", "Enemy side, ..." (or "Side 1" and
+"Side 2" when the game does not say you attacked), each unit with its
 soldiers and kills. Accept (Enter twice) continues.
 After taking a settlement you choose what to do with it: "Occupy, button,
 Conquest penalty -10, Province instability -3, You occupy the settlement and

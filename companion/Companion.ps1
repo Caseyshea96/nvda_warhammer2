@@ -190,23 +190,50 @@ try {
         $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
         try {
             [IO.File]::WriteAllText($temporary, $Text, (New-Object Text.UTF8Encoding $false))
-            if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary, $Path, [NullString]::Value) }
-            else { [IO.File]::Move($temporary, $Path) }
+            # The mod reads keys.tsv ten times a second; a replace that meets its
+            # read fails with a sharing violation, so try a few times (0.6.75).
+            for ($attempt = 1; ; $attempt++) {
+                try {
+                    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary, $Path, [NullString]::Value) }
+                    else { [IO.File]::Move($temporary, $Path) }
+                    break
+                } catch [IO.IOException] {
+                    if ($attempt -ge 4) { throw }
+                    Start-Sleep -Milliseconds 15
+                }
+            }
         } finally { if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) } }
     }
-    function Read-ReaderState {
+    # 0.6.75: reader-state.tsv is read once per tick for the keys and the stall
+    # watch together. The mod rewrites it about once a second; it is opened with
+    # full sharing, and a read that meets a write (locked or half-written) keeps
+    # the last good contents, so a collision never releases the keys.
+    $script:StateFile = $null
+    function Read-StateFile {
         $path = Join-Path $base 'reader-state.tsv'
+        $info = New-Object IO.FileInfo $path
+        if (-not $info.Exists) { $script:StateFile = $null; return $null }
+        $fields = $null
         try {
-            $info = New-Object IO.FileInfo $path
-            # 15 s, not 3: the game sometimes stalls the mod's timers for a few
-            # seconds (camera jumps); releasing the keys then sent Enter to the
-            # game (live 0.6.68). Keys pressed meanwhile wait in keys.tsv. Map
-            # controls (Shift+F2) and leaving the game still release them at once.
-            if (-not $info.Exists -or ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds -gt 15) { return $null }
-            $fields = ([IO.File]::ReadAllText($path)).TrimEnd("`r", "`n").Split("`t")
-            if ($fields.Count -ne 5 -or $fields[0] -ne 'WH2READER1' -or $fields[3] -ne '1') { return $null }
-            return [pscustomobject]@{ session = $fields[1]; generation = $fields[2]; screen = $fields[4] }
-        } catch { return $null }
+            $stream = New-Object IO.FileStream($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+            try { $text = (New-Object IO.StreamReader($stream)).ReadToEnd() } finally { $stream.Dispose() }
+            $parts = $text.TrimEnd("`r", "`n").Split("`t")
+            if ($parts.Count -eq 5 -and $parts[0] -eq 'WH2READER1') { $fields = $parts }
+        } catch { }
+        if (-not $fields) {
+            if (-not $script:StateFile) { return $null }
+            $fields = $script:StateFile.Fields
+        }
+        $script:StateFile = [pscustomobject]@{ Age = ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds; Fields = $fields; WriteUtc = $info.LastWriteTimeUtc }
+        return $script:StateFile
+    }
+    function Read-ReaderState([object]$State) {
+        # 15 s, not 3: the game sometimes stalls the mod's timers for a few
+        # seconds (camera jumps); releasing the keys then sent Enter to the
+        # game (live 0.6.68). Keys pressed meanwhile wait in keys.tsv. Map
+        # controls (Shift+F2) and leaving the game still release them at once.
+        if (-not $State -or $State.Age -gt 15 -or $State.Fields[3] -ne '1') { return $null }
+        return [pscustomobject]@{ session = $State.Fields[1]; generation = $State.Fields[2]; screen = $State.Fields[4] }
     }
     function Write-MenuKeys {
         $session = '-'; $generation = '-'
@@ -214,13 +241,15 @@ try {
         $lines = @("WH2KEYS1`t" + $script:KeyOwner + "`t" + $session + "`t" + $generation) + $script:KeyRing
         Write-AtomicText (Join-Path $base 'keys.tsv') (($lines -join "`n") + "`n")
     }
+    $script:KeysDirty = $false # keys.tsv still needs writing (the last write failed)
     function Send-MenuKey([string]$Action) {
         if (-not $script:Reader) { return }
         $script:KeySeq++
         $script:KeyPending = $true
         $script:KeyRing.Add(([string]$script:KeySeq) + "`t" + $Action)
         while ($script:KeyRing.Count -gt 16) { $script:KeyRing.RemoveAt(0) }
-        Write-MenuKeys
+        # A failed write is retried on the next tick, so the key is never lost (0.6.75).
+        try { Write-MenuKeys; $script:KeysDirty = $false } catch { $script:KeysDirty = $true; throw }
     }
     # A stalled game leaves a blind player in silence (live, Nov 1: graphics
     # driver timeouts stopped the game's main loop and with it the mod). When
@@ -229,26 +258,43 @@ try {
     # intro movies 'loading'; those never count.
     $script:StallSeen = $false; $script:StallScreen = $null; $script:StallSaid = $false
     function Test-GameFocused { return [WarhammerAccessibility.MenuKeys]::GameFocused() }
-    function Watch-GameStall {
-        $info = New-Object IO.FileInfo (Join-Path $base 'reader-state.tsv')
-        if (-not $info.Exists) { return }
-        $age = ([DateTime]::UtcNow - $info.LastWriteTimeUtc).TotalSeconds
-        if ($age -le 3) {
-            $fields = ([IO.File]::ReadAllText($info.FullName)).TrimEnd("`r", "`n").Split("`t")
-            if ($fields.Count -ne 5 -or $fields[0] -ne 'WH2READER1') { return }
+    # A heartbeat written before the running game started is from an earlier
+    # run (a crash, then a relaunch from this helper): not a stall (0.6.75).
+    function Test-HeartbeatFromRunningGame([DateTime]$WriteUtc) {
+        $game = Get-Process -Name Warhammer2 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $game) { return $false }
+        try { return $game.StartTime.ToUniversalTime() -le $WriteUtc } catch { return $true }
+    }
+    function Watch-GameStall([object]$State) {
+        if (-not $State) { return }
+        $fields = $State.Fields
+        if ($State.Age -le 3) {
             if ($script:StallSaid -and $fields[4] -ne 'loading') { Speak 'The game is responding again.' -Interrupt $false }
             $script:StallSaid = $false; $script:StallSeen = $true; $script:StallScreen = $fields[4]
             return
         }
-        if ($script:StallSaid -or -not $script:StallSeen -or $script:StallScreen -eq 'loading' -or $age -le 5 -or $age -gt 600) { return }
+        if ($script:StallSaid -or -not $script:StallSeen -or $script:StallScreen -eq 'loading' -or $State.Age -le 5 -or $State.Age -gt 600) { return }
         if (-not (Test-GameFocused)) { return }
+        if (-not (Test-HeartbeatFromRunningGame $State.WriteUtc)) { return }
         $script:StallSaid = $true
         Speak 'The game is not responding.' -Interrupt $false
     }
+    # 0.6.75: after an NVDA error (NVDA restarted, or started after the helper)
+    # reconnect by itself every 5 s; a blind player cannot see the button.
+    $script:NextReconnect = [DateTime]::MinValue
+    function Restore-Speech {
+        if ($Console -or $script:NvdaConnected -or [DateTime]::UtcNow -lt $script:NextReconnect) { return }
+        $script:NextReconnect = [DateTime]::UtcNow.AddSeconds(5)
+        if (Connect-ScreenReader) { Speak 'Speech reconnected.' -Interrupt $false }
+    }
     function Read-Bridge {
         if ($script:MenuKeysObj) {
-            try { Watch-GameStall } catch { Log-Error ('Stall watch: ' + $_.Exception.Message) }
-            $script:Reader = Read-ReaderState
+            $state = Read-StateFile
+            try { Watch-GameStall $state } catch { Log-Error ('Stall watch: ' + $_.Exception.Message) }
+            $script:Reader = Read-ReaderState $state
+            if ($script:KeysDirty -and $script:Reader) {
+                try { Write-MenuKeys; $script:KeysDirty = $false } catch { Log-Error ('Menu keys write: ' + $_.Exception.Message) }
+            }
             $failures = $script:MenuKeysObj.SetActive($null -ne $script:Reader, ($null -ne $script:Reader -and $script:Reader.screen -eq 'campaign'))
             if ($failures -and $failures -ne $script:LastMenuKeyFailures) {
                 Log-Error ('Menu keys: ' + $failures + ' could not be registered or released (another program may own them).')
@@ -320,7 +366,7 @@ try {
     Add-Button '&Open diagnostic folder' { Start-Process explorer.exe -ArgumentList $base }
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 100
-    $timer.Add_Tick({ Read-Bridge })
+    $timer.Add_Tick({ Restore-Speech; Read-Bridge })
     $form.Add_Shown({
         $connected = Test-Speech
         $timer.Start()

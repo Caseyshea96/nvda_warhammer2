@@ -1277,7 +1277,7 @@ local function no_engine_words(text)
 end
 -- 0.6.61: "ready" is spoken once the key timer ticks steadily (the intro
 -- movies stop the game's timers), not at load.
-local ready_text='Warhammer accessibility 0.6.74 ready. Arrow keys move, Enter activates.'
+local ready_text='Warhammer accessibility 0.6.75 ready. Arrow keys move, Enter activates.'
 local function ready_count()
     local n,from=0,1
     local bridge=contents('bridge.jsonl')
@@ -1551,6 +1551,8 @@ key('script_F2'); key('script_F2'); assert(says('Continue Campaign, button, 2 of
 click_hook=function() assert(says('Loading campaign. Please wait.'),'Continue announces before click'); assert(reader_state()[5]=='loading','Loading state written before the click: ' .. tostring(reader_state()[5])) end
 key('script_F4'); assert(#dispatches==1 and dispatches[1]==continue_campaign and says('Loading campaign. Please wait.'),last()); click_hook=nil
 ticks(12); assert(reader_state()[5]=='loading','Loading stays while the campaign loads')
+-- 0.6.75: still ticking in the menu ~10 s later (no load happened): 'loading' is dropped.
+ticks(90); assert(reader_state()[5]~='loading','Loading cleared when the menu keeps running: ' .. tostring(reader_state()[5]))
 start(nil,other_pc)
 for n=1,3 do key('script_F2') end; assert(says('Load Campaign'),last())
 key('script_F4'); assert(#dispatches==0 and says('Load Campaign is unavailable.'),last())

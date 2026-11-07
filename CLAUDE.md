@@ -28,6 +28,18 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
+**Branches (owner, Nov 7):** work and pushes go to the shared `dev` branch
+("start pushing updates to a new branch so my friend and i can collaborate");
+`main` changes only when the owner says so. Releases (`tools/Publish-Release.ps1`)
+are still only on the owner's go-ahead and need HEAD pushed to its branch.
+
+- `docs/REVIEW_FIXES_0_6_75.md` — 0.6.75: 13 review fixes (pre-battle
+  allow-list, keys never released by a file collision, NVDA auto-reconnect,
+  results rows from the game's attacker/defender, attack watch, no false
+  "not responding" on relaunch, F6 from the game's selection event, …).
+  Installed and live-tested on this PC; not published. The campaign module is at
+  Lua 5.1's 200-locals limit: add new state to an existing table.
+
 - `docs/ATTACKS_0_6_74.md` — 0.6.74: F7 attacks enemies at war (settlements,
   nearest armies) with the game's attack orders; the pre-battle, results and
   Settlement Captured screens are read (HUD hidden); Auto-resolve and every
@@ -225,7 +237,7 @@ authorized scope.
 - Verify each major transition before continuing.
 - Never repeatedly click a control without checking the resulting state.
 - If the same launch step fails twice, investigate rather than retrying blindly.
-- Preserve the last known working build (0.6.74; before it 0.6.73, backup `work/preinstall-0.6.74-7477ea96`) as the rollback.
+- Preserve the last known working build (0.6.75; before it 0.6.74, backup `work/preinstall-0.6.75-defd4a6e`) as the rollback.
 - Do not delete game saves or unrelated configuration files.
 - Distinguish launcher failures, mod-loading failures, game crashes, and
   accessibility integration failures.

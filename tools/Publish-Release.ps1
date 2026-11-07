@@ -4,7 +4,8 @@
 #   powershell -File tools/Publish-Release.ps1 -Version 0.6.69 -Notes "What changed"
 #   powershell -File tools/Publish-Release.ps1 -Version 0.6.69 -NotesFile notes.md   (several lines)
 # Refuses unless: the ZIP and checksum exist and match, the version is the one
-# in source, HEAD is pushed to origin/main, and the tag does not exist yet.
+# in source, HEAD is pushed to its branch on origin (main or dev), and the tag
+# does not exist yet.
 # Publishing is public: run it only when the owner wants this version out.
 param([Parameter(Mandatory=$true)][string]$Version, [string]$Notes, [string]$NotesFile)
 $ErrorActionPreference = 'Stop'
@@ -21,8 +22,11 @@ $sourceVersion = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'tool
 if ($Version -ne $sourceVersion) { throw "Source is at $sourceVersion, not $Version." }
 Push-Location $repo
 try {
-    git fetch -q origin main
-    if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) { throw 'HEAD is not pushed to origin/main; push first.' }
+    # Releases can come from main or from the shared dev branch: HEAD must be pushed to its branch.
+    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
+    if ($branch -eq 'HEAD') { throw 'Not on a branch; check out main or dev first.' }
+    git fetch -q origin $branch
+    if ((git rev-parse HEAD) -ne (git rev-parse "origin/$branch")) { throw "HEAD is not pushed to origin/$branch; push first." }
     if (git tag --list "v$Version") { throw "Tag v$Version already exists." }
     # "release not found" on stderr is the expected answer; Windows PowerShell
     # would turn it into a terminating error under 'Stop'.

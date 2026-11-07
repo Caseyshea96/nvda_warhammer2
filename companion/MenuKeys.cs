@@ -50,10 +50,19 @@ namespace WarhammerAccessibility {
             bindings.Add(0x5000 + bindings.Count, new Binding { Mods = mods, Key = key, Action = action });
         }
 
+        // Asked several times a second: the answer is kept per foreground process
+        // ID, so a Process object is built only when the foreground app changes.
+        private static uint cachedPid;
+        private static bool cachedIsGame;
         public static bool GameFocused() {
             uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid);
-            try { return Process.GetProcessById((int)pid).ProcessName.Equals("Warhammer2", StringComparison.OrdinalIgnoreCase); }
-            catch { return false; }
+            if (pid == 0) return false;
+            if (pid == cachedPid) return cachedIsGame;
+            bool isGame;
+            try { using (var p = Process.GetProcessById((int)pid)) isGame = p.ProcessName.Equals("Warhammer2", StringComparison.OrdinalIgnoreCase); }
+            catch { isGame = false; }
+            cachedPid = pid; cachedIsGame = isGame;
+            return isGame;
         }
 
         // Returns how many keys failed to register or release (0 when all went well).

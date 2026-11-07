@@ -31,7 +31,7 @@ if not diagnostic then owner,expiry,mode='player','9999-12-31T23:59:59Z','player
 -- os.clock makes it unique: the companion drops speech from a retired
 -- session, and a table address alone can repeat in a later campaign load.
 local session='campaign:' .. owner .. ':' .. tostring({}) .. ':' .. tostring((pcall(os.clock) and os.clock()) or 0)
-local version='0.6.74'
+local version='0.6.75'
 local sequence,generation,bytes,run,attempts=0,1,0,0,0
 local phase,result,last_request='initialising','ready',''
 local queue,head,visited,page,entries,index={},1,0,0,{},0
@@ -86,6 +86,13 @@ local function remember_entries()
     local current=entries[index]
     focus_key=current and ((current.idpath or current.key) .. '|' .. current.name) or nil
 end
+-- 0.6.75 battles: whether the player attacked in the current battle (the
+-- game's pending battle, read in a game-timer job; nil when unknown), and the
+-- reader tick when a battle panel last opened (ends the attack watch quietly).
+-- F6 (0.6.75): announce = a settlement selection waiting for the game's
+-- SettlementSelected event ({fallback=summary, until_fast=when to say it instead}).
+-- One table: the main chunk is at Lua 5.1's limit of 200 locals.
+local battle_state={attacker=nil,panel_tick=nil,announce=nil}
 local verified_reader=false
 local client_captures=0
 local auto_reader=false -- verify-mode HUD reading keeps the one-second pace
@@ -330,7 +337,7 @@ local function contribute(entry,id,name,tip_name,state,parent,item)
         if id=='option_button' and item then
             entry.path,entry.ids,entry.id=item.path,item.ids,id
             entry.idpath=table.concat(item.ids,'/') .. '/' .. id
-            entry.description=tip_name
+            entry.description=tip_name; entry.read_only=nil
         elseif id=='dy_option' and name~='' then entry.name=name
         elseif parent=='icon_parent' and name~='' then
             local label=id=='dy_income' and 'Income' or tip_name
@@ -615,14 +622,22 @@ local function page_read()
                         local first=(type(tip)=='string' and tip or ''):match('^([^\n]*)') or ''
                         entry.name=clean(first)
                         if type(tip)=='string' and tip:match('disbanded') then add_state(entry,'disbanded') end
-                    elseif kind=='option' then entry.role='button'; entry.name=''
+                    elseif kind=='option' then
+                        -- Pressable only once its own option_button is found (0.6.75).
+                        entry.role='button'; entry.name=''; entry.read_only=true
                     elseif kind=='save' then
                         -- The tooltip says why a save cannot be loaded ("You cannot load this save game").
                         entry.role='list item'; entry.name=''; entry.description=tip_name
                         if state=='selected' then add_state(entry,'selected') end
                         if tip_name:match('cannot') then add_state(entry,'unavailable') end
                     elseif kind=='result' then
-                        entry.read_only=true; entry.name=id=='row_example' and 'Your side' or 'Enemy side'
+                        -- 0.6.75: "Your side" only when the game says the player attacked
+                        -- (live: then the first row is the player's); otherwise the rows
+                        -- are numbered, since their order when defending is unverified.
+                        entry.read_only=true
+                        local number=id=='row_example' and 1 or ((tonumber(id:match('(%d+)$')) or 1)+1)
+                        if battle_state.attacker==true then entry.name=number==1 and 'Your side' or 'Enemy side'
+                        else entry.name='Side ' .. number end
                     elseif kind=='lordtype' then
                         entry.role='tab'; entry.name=(id:gsub('_',' '))
                         if state=='selected' then add_state(entry,'selected') end
@@ -1223,21 +1238,31 @@ local function model_call(fn)
     model_wait_tick=model_wait_tick or ticks
 end
 local function select_failed(target)
+    battle_state.announce=nil
     speak('Could not find ' .. target.name .. ' in the ' .. (target.kind=='lord' and 'Lords' or 'Provinces') .. ' list.')
 end
 local function selected(target)
-    if target.kind=='lord' then selected_cqi,selected_region,last_lord_cqi=target.cqi,nil,target.cqi else selected_cqi,selected_region=nil,target.key end
-    speak(target.summary)
+    if target.kind=='lord' then
+        selected_cqi,selected_region,last_lord_cqi=target.cqi,nil,target.cqi
+        speak(target.summary)
+    else
+        -- 0.6.75: the settlement is named by the game's SettlementSelected event
+        -- (a province row selects the province's own choice); this summary only
+        -- if no event comes within two seconds.
+        selected_cqi=nil
+        if battle_state.announce then selected_region=target.key; battle_state.announce.until_fast=fast_count+20 end
+    end
     post_click=ticks+2
 end
 -- On the reader's timer: click the target's row, opening its list first.
 local function select_step()
     local pending=pending_select; if not pending then return end
     local target=pending.target
+    if target.kind=='settlement' then battle_state.announce=battle_state.announce or {fallback=target.summary} end
     local result=click_row(target)
     if result=='clicked' then pending_select=nil; selected(target); return end
     if result=='ambiguous' then
-        pending_select=nil
+        pending_select=nil; battle_state.announce=nil
         speak('More than one lord is called ' .. target.short .. '. Choose him in the Lords & Heroes list.'); return
     end
     if not pending.until_fast then
@@ -1522,15 +1547,18 @@ local function watch_moving()
         end
         return
     end
-    -- An attack that reaches its target opens the battle screen, which is read
+    -- An attack that reaches its target opens a battle panel, which is read
     -- instead (the army may not move at all when the enemy is next to it).
-    local near=distance(x,y,moving.x,moving.y)<=(moving.attack and 5 or 3)
-    if moving.attack and near and (moving.still>=2 or elapsed>=9) then moving=nil; return end
+    -- 0.6.75: only a panel ends the watch quietly; an army that stops short
+    -- (no movement left) is reported.
+    if moving.attack and battle_state.panel_tick and battle_state.panel_tick>=moving.started then moving=nil; return end
+    local near=distance(x,y,moving.x,moving.y)<=3
     if not moving.moved and elapsed>=9 then speak(moving.name .. ' did not move.'); moving=nil; return end
     if (moving.moved and moving.still>=2) or elapsed>=60 then
         local _,ap=read(function() local v=char:action_points_remaining_percent(); return v end)
         ap=percent(ap)
-        if near then speak(moving.name .. ' arrived at ' .. moving.dest .. '.')
+        if near and moving.attack then speak(moving.name .. ' stopped next to ' .. moving.dest .. '; no battle started.')
+        elseif near then speak(moving.name .. ' arrived at ' .. moving.dest .. '.')
         else speak(moving.name .. ' stopped on the way to ' .. moving.dest .. (ap and (', ' .. (ap==0 and 'no movement left' or (ap .. ' percent movement left'))) or '') .. '.') end
         moving=nil
     end
@@ -1562,6 +1590,8 @@ local function under_panel(item,panel)
     for _,id in ipairs(item.ids or {}) do if id==panel then return true end end
     return false
 end
+battle_state.allowed={button_autoresolve=true,button_retreat=true,button_surround=true,
+    button_continue_siege=true,button_save=true,button_info=true}
 -- 0.6.74: every choice around a battle asks first (Auto Resolve, retreat,
 -- siege, and what to do with a captured settlement or prisoners).
 local function battle_choice(item,id)
@@ -1579,11 +1609,13 @@ local function activate_current()
     local id=type(item.id)=='string' and item.id or ''
     local role=entry_role(item)
     if not activatable[role] or item.read_only or (role=='button' and id:sub(1,5)=='sort_') then speak('Not supported yet.'); return end
-    -- Battles are auto resolved (owner decision): the pre-battle panel's
-    -- button for fighting the battle yourself is never pressed.
-    if (id=='button_attack' or id=='button_preview_map') and under_panel(item,'popup_pre_battle') then
+    -- Battles are auto resolved (owner decision). On the pre-battle panel only
+    -- known safe buttons are pressed (0.6.75: an allow-list, so a manual-battle
+    -- button with another ID, e.g. on a defender's or siege panel, is refused too).
+    if role=='button' and under_panel(item,'popup_pre_battle') and not battle_state.allowed[id] then
         -- Scout terrain loads the battle map, like fighting it.
-        speak((id=='button_attack' and 'Fighting the battle yourself' or 'Scouting the battle map') .. ' is not supported. Choose Auto-resolve.'); return
+        local what=(id=='button_attack' and 'Fighting the battle yourself') or (id=='button_preview_map' and 'Scouting the battle map') or item.name
+        speak(what .. ' is not supported. Choose Auto-resolve.'); return
     end
     local node=fresh_node(item); if not node then return end
     if item.settlement then open_upgrades(item,node); return end
@@ -1804,7 +1836,11 @@ local function tick()
         end
         fast_count=fast_count+1
         if reader_mode then poll_keys() end
-        if pending_select and not pcall(select_step) then pending_select=nil; speak('Could not do that.') end
+        if pending_select and not pcall(select_step) then pending_select=nil; battle_state.announce=nil; speak('Could not do that.') end
+        -- F6: no SettlementSelected event within two seconds: say the target instead.
+        if battle_state.announce and battle_state.announce.until_fast and fast_count>=battle_state.announce.until_fast then
+            local fallback=battle_state.announce.fallback; battle_state.announce=nil; speak(fallback)
+        end
         publish_reader_state(false)
         if polling and not repeating then real_timer.register_singleshot(timer_name,(reader_mode and not auto_reader) and 100 or 1000) end
     end)
@@ -1862,7 +1898,37 @@ core:add_listener('warhammer_campaign_discovery_first_tick','FirstTickAfterWorld
             end)
         end,true)
         core:add_listener('warhammer_campaign_selection_settlement','SettlementSelected',true,function(context)
-            pcall(function() selected_region=context:garrison_residence():region():name(); selected_cqi=nil end)
+            pcall(function()
+                local region=context:garrison_residence():region()
+                selected_region=region:name(); selected_cqi=nil
+                -- 0.6.75: F6 names the settlement the game actually selected.
+                if battle_state.announce then
+                    battle_state.announce=nil
+                    local name=localised('regions_onscreen_' .. tostring(selected_region)) or tostring(selected_region)
+                    local province=localised('provinces_onscreen_' .. tostring(region:province_name()))
+                    speak(name .. (province and (', ' .. province) or '') .. '.')
+                end
+            end)
+        end,true)
+        -- 0.6.75: battle panels. Ends the attack watch, and asks the game (in a
+        -- game-timer job) whether the player is the attacker, for the results rows.
+        core:add_listener('warhammer_campaign_battle_panels','PanelOpenedCampaign',
+            function(c) return battle_panels[c.string]==true end,function(c)
+            pcall(function()
+                battle_state.panel_tick=ticks
+                if c.string=='popup_pre_battle' then battle_state.attacker=nil end
+                if c.string=='popup_pre_battle' or c.string=='popup_battle_results' then
+                    model_call(function()
+                        pcall(function()
+                            local game=campaign_game(); local battle=game:model():pending_battle()
+                            local mine=game:get_local_faction_name(true)
+                            if battle:has_attacker() and battle:attacker():faction():name()==mine then battle_state.attacker=true
+                            elseif battle:has_defender() and battle:defender():faction():name()==mine then battle_state.attacker=false end
+                        end)
+                        pcall(function() emit('{"kind":"battle-sides","player_attacker":' .. tostring(battle_state.attacker) .. '}') end)
+                    end)
+                end
+            end)
         end,true)
         -- The one repeating game timer for model jobs (registered here, at the
         -- first tick, never from inside a timer callback).
