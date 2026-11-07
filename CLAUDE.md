@@ -37,7 +37,7 @@ are still only on the owner's go-ahead and need HEAD pushed to its branch.
   allow-list, keys never released by a file collision, NVDA auto-reconnect,
   results rows from the game's attacker/defender, attack watch, no false
   "not responding" on relaunch, F6 from the game's selection event, …).
-  Installed and live-tested on this PC; not published. The campaign module is at
+  Installed, live-tested on this PC, published as release v0.6.75 (from dev). The campaign module is at
   Lua 5.1's 200-locals limit: add new state to an existing table.
 
 - `docs/ATTACKS_0_6_74.md` — 0.6.74: F7 attacks enemies at war (settlements,

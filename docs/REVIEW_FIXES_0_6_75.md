@@ -86,3 +86,11 @@ No turn ended; save files unchanged.
 - A defender's pre-battle panel and its button IDs (the allow-list refuses
   unknown ones); results-row order when defending (rows are numbered then).
 - Keys colliding with a write in practice (no collisions logged in these runs).
+
+## Published
+
+Owner's go-ahead (Nov 7): release **v0.6.75** from the `dev` branch
+(https://github.com/Caseyshea96/nvda_warhammer2/releases/tag/v0.6.75, ZIP +
+`.sha256`, tagged at d9f849d). The downloaded ZIP matches the local build; the
+installed Update shortcut script says "Version 0.6.75 is installed; the newest
+release is 0.6.75. Nothing to update." `main` stays at 0.6.74.
