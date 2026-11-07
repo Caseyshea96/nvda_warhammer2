@@ -28,14 +28,17 @@ left intact. Paths like `work/live-0.6.17-lord-discovery` in the docs resolve he
 
 ## Current state — read before working
 
-**Branches (owner, Nov 7):** new versions go on a branch named `Casey_MMDDYY`
-for the day the work is done ("make the default branch names for my new versions
-Casey_110726 etc"): Nov 7, 2026 is `Casey_110726`. Start a day's branch from the
-newest one (the previous `Casey_*` branch, or `dev` before the first), commit and
-push there; versions on the same day share that day's branch. `dev` (shared with
-the friend, Nov 7) and `main` change only when the owner says so. Releases
-(`tools/Publish-Release.ps1`) are still only on the owner's go-ahead and need
-HEAD pushed to its branch.
+**Branches (owner, Nov 7):** each version goes on a branch named for the person
+whose work it is and the day: `<first name>_MMDDYY` — `Casey_110726` for the owner,
+`Lucas_110726` for his friend Lucas (GitHub `Luperdoof`) ("make the default branch
+names for my new versions Casey_110726 etc"; "if my friend pushes a version it
+should have his name (Lucas)"). `powershell -File tools/New-DayBranch.ps1` switches
+to today's branch (name from git user.name; creates it from the current commit,
+so start from your newest branch) and turns on `.githooks/pre-push`, which
+refuses to push a `<name>_MMDDYY` branch carrying someone else's name. Versions
+on the same day share that day's branch. `dev` (shared, Nov 7) and `main` change
+only when the owner says so. Releases (`tools/Publish-Release.ps1`) are still
+only on the owner's go-ahead and need HEAD pushed to its branch.
 
 - `docs/REVIEW_FIXES_0_6_75.md` — 0.6.75: 13 review fixes (pre-battle
   allow-list, keys never released by a file collision, NVDA auto-reconnect,

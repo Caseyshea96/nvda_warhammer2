@@ -1,0 +1,27 @@
+#!/bin/sh
+# Version branches are named for the person whose work they hold:
+# <first name>_MMDDYY (Casey_110726, Lucas_110726). This refuses to push a
+# branch of that shape that carries someone else's name. Other branches
+# (main, dev, ...) are not checked. Turned on by tools/New-DayBranch.ps1
+# (git config core.hooksPath .githooks).
+user=$(git config user.name)
+first=$(printf '%s' "$user" | awk '{print $1}')
+case "$(printf '%s' "$first" | tr 'A-Z' 'a-z')" in
+  luperdoof|lucas) me=Lucas ;;
+  caseyshea96|casey) me=Casey ;;
+  *) me=$first ;;
+esac
+status=0
+while read local_ref local_sha remote_ref remote_sha; do
+  branch=${remote_ref#refs/heads/}
+  case "$branch" in
+    *_[0-9][0-9][0-9][0-9][0-9][0-9])
+      owner=${branch%_*}
+      if [ "$(printf '%s' "$owner" | tr 'A-Z' 'a-z')" != "$(printf '%s' "$me" | tr 'A-Z' 'a-z')" ]; then
+        echo "Not pushed: $branch is named for $owner, but you are $me (git user.name: $user)." >&2
+        echo "Put your work on your own branch: powershell -File tools/New-DayBranch.ps1" >&2
+        status=1
+      fi ;;
+  esac
+done
+exit $status
